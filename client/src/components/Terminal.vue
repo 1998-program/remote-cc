@@ -1,6 +1,23 @@
 <template>
-  <div class="terminal-wrap" ref="wrapRef">
-    <div class="term-container" ref="termRef"></div>
+  <div class="terminal-wrap" ref="wrapRef"
+    @dragover.prevent="dragOver = true"
+    @dragleave="dragOver = false"
+    @drop.prevent="onDrop">
+    <div class="term-container" ref="termRef"
+      :class="{ 'drag-over': dragOver }"></div>
+
+    <!-- 图片上传工具栏 -->
+    <div class="img-bar">
+      <label class="img-upload-btn" :class="{ uploading }" :title="uploading ? '上传中...' : '上传图片（也可拖拽或粘贴图片）'">
+        <input type="file" accept="image/*" multiple style="display:none" @change="onFileSelect" :disabled="uploading" />
+        <span v-if="!uploading">🖼</span>
+        <span v-else class="spin">◌</span>
+      </label>
+      <span v-if="lastUploadPath" class="img-path-hint" :title="lastUploadPath">
+        ✓ {{ shortPath(lastUploadPath) }}
+      </span>
+    </div>
+
     <SymbolBar v-if="settings.symbolBar" :currentLine="currentLine" @input="$emit('input', $event)" />
     <Teleport to="body">
       <div v-if="ctxMenu.show" class="ctx-overlay"
@@ -42,6 +59,67 @@ const wrapRef = ref(null);
 const pasteInputRef = ref(null);
 const ctxMenu = reactive({ show: false, x: 0, y: 0 });
 const currentLine = ref('');
+
+// ── 图片上传 ──────────────────────────────────────────────────────────────────
+const uploading = ref(false);
+const dragOver  = ref(false);
+const lastUploadPath = ref('');
+
+function shortPath(p) {
+  return p.split('/').slice(-2).join('/');
+}
+
+async function uploadFile(file) {
+  if (!file || !file.type.startsWith('image/')) return;
+  uploading.value = true;
+  lastUploadPath.value = '';
+  try {
+    const buf = await file.arrayBuffer();
+    const ext = file.name.match(/\.[^.]+$/)?.[0] || '.png';
+    const res = await fetch('/api/upload', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('rcc_token') || ''}`,
+        'Content-Type': 'application/octet-stream',
+        'X-Filename': file.name,
+      },
+      body: buf,
+    });
+    if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
+    const { path: filePath } = await res.json();
+    lastUploadPath.value = filePath;
+    // 自动把路径输入到终端（加空格分隔，方便连续上传多张）
+    emit('input', filePath + ' ');
+  } catch (e) {
+    console.error('Upload error:', e);
+  } finally {
+    uploading.value = false;
+  }
+}
+
+async function onFileSelect(e) {
+  const files = Array.from(e.target.files || []);
+  e.target.value = '';
+  for (const f of files) await uploadFile(f);
+}
+
+function onDrop(e) {
+  dragOver.value = false;
+  const files = Array.from(e.dataTransfer.files || []);
+  files.forEach(uploadFile);
+}
+
+// 拦截剪贴板粘贴图片（不影响文字粘贴）
+function onTerminalPaste(e) {
+  const items = Array.from(e.clipboardData?.items || []);
+  const imageItem = items.find(i => i.type.startsWith('image/'));
+  if (imageItem) {
+    e.preventDefault();
+    const file = imageItem.getAsFile();
+    if (file) uploadFile(file);
+  }
+  // 文字粘贴由 Terminal 原有逻辑处理
+}
 let awaitingPaste = false;
 
 let term, fitAddon, resizeObserver, resizeTimer;
@@ -155,6 +233,8 @@ onMounted(() => {
   });
 
   // ── 粘贴：监听原生 paste 事件（Ctrl+V / 手机长按粘贴） ──────────────────
+  // onTerminalPaste 先检查是否是图片，如果是则拦截上传；否则 onNativePaste 处理文字
+  termRef.value.addEventListener('paste', onTerminalPaste);
   termRef.value.addEventListener('paste', onNativePaste);
 
   termRef.value.addEventListener('contextmenu', onContextMenu);
@@ -198,6 +278,7 @@ onBeforeUnmount(() => {
   clearTimeout(resizeTimer);
   termRef.value?.removeEventListener('contextmenu', onContextMenu);
   termRef.value?.removeEventListener('paste', onNativePaste);
+  termRef.value?.removeEventListener('paste', onTerminalPaste);
   term?.dispose();
 });
 
@@ -309,6 +390,37 @@ function ctxClear()     { ctxMenu.show = false; term?.clear(); }
 <style scoped>
 .terminal-wrap { display: flex; flex-direction: column; width: 100%; height: 100%; overflow: hidden; }
 .term-container { flex: 1; min-height: 0; overflow: hidden; padding: 4px; }
+.term-container.drag-over { outline: 2px dashed var(--neon); outline-offset: -4px; }
+
+/* 图片上传工具栏 */
+.img-bar {
+  display: flex; align-items: center; gap: 8px;
+  padding: 3px 8px;
+  background: var(--bg2);
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.img-upload-btn {
+  display: flex; align-items: center; justify-content: center;
+  width: 26px; height: 22px;
+  background: color-mix(in srgb, var(--neon) 8%, var(--bg3));
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: background .12s, border-color .12s;
+  user-select: none;
+}
+.img-upload-btn:hover { background: color-mix(in srgb, var(--neon) 15%, transparent); border-color: var(--neon); }
+.img-upload-btn.uploading { opacity: .6; cursor: default; }
+.spin { animation: spin .8s linear infinite; display: inline-block; font-style: normal; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.img-path-hint {
+  font-family: 'JetBrains Mono', monospace; font-size: 10px;
+  color: var(--neon); opacity: .7;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  max-width: 200px;
+}
 </style>
 
 <style>

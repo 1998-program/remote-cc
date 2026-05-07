@@ -77,6 +77,32 @@ app.get('/docs', (req, res) => {
 
 app.use(httpAuth);
 
+// ── 图片上传（存到 ~/.rcc/uploads/，返回服务器路径供 claude 使用）──────────
+const UPLOAD_DIR = path.join(RCC_DIR, 'uploads');
+fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+
+app.post('/api/upload', (req, res) => {
+  const contentType = req.headers['content-type'] || '';
+  // 支持两种方式：multipart/form-data 和 application/octet-stream
+  const ext = (req.headers['x-filename'] || 'image.png')
+    .replace(/[^a-zA-Z0-9._-]/g, '_')
+    .match(/\.[a-zA-Z0-9]+$/)?.[0] || '.png';
+  const filename = `${uuidv4()}${ext}`;
+  const filepath = path.join(UPLOAD_DIR, filename);
+
+  const chunks = [];
+  req.on('data', c => chunks.push(c));
+  req.on('end', () => {
+    try {
+      fs.writeFileSync(filepath, Buffer.concat(chunks));
+      res.json({ path: filepath, filename });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+  req.on('error', e => res.status(500).json({ error: e.message }));
+});
+
 app.get('/api/projects',               (req, res) => { try { res.json(getProjects()); }                      catch (e) { res.status(500).json({ error: e.message }); } });
 app.get('/api/sessions/:projectId',    (req, res) => { try { res.json(getSessions(req.params.projectId)); }  catch (e) { res.status(500).json({ error: e.message }); } });
 app.get('/api/session/:sessionId',     (req, res) => { try { res.json(readSession(req.params.sessionId)); }  catch (e) { res.status(500).json({ error: e.message }); } });
