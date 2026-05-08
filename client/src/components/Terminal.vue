@@ -2,15 +2,17 @@
   <div class="terminal-wrap" ref="wrapRef"
     @dragover.prevent="dragOver = true"
     @dragleave="dragOver = false"
-    @drop.prevent="onDrop">
+    @drop.prevent="onDrop"
+    @click="focusTerm">
     <div class="term-container" ref="termRef"
       :class="{ 'drag-over': dragOver }"></div>
 
-    <!-- 图片上传工具栏 -->
-    <div class="img-bar">
-      <label class="img-upload-btn" :class="{ uploading }" :title="uploading ? '上传中...' : '上传图片（也可拖拽或粘贴图片）'">
-        <input type="file" accept="image/*" multiple style="display:none" @change="onFileSelect" :disabled="uploading" />
-        <span v-if="!uploading">🖼</span>
+    <!-- 图片/文件上传工具栏 -->
+    <div class="img-bar" @click.stop>
+      <label class="img-upload-btn" :class="{ uploading }" :title="uploading ? '上传中...' : '上传图片或文件'">
+        <input type="file" accept="image/*,*/*" multiple style="display:none"
+          @change="onFileSelect" :disabled="uploading" />
+        <span v-if="!uploading">＋</span>
         <span v-else class="spin">◌</span>
       </label>
       <span v-if="lastUploadPath" class="img-path-hint" :title="lastUploadPath">
@@ -60,22 +62,27 @@ const pasteInputRef = ref(null);
 const ctxMenu = reactive({ show: false, x: 0, y: 0 });
 const currentLine = ref('');
 
-// ── 图片上传 ──────────────────────────────────────────────────────────────────
+// ── 图片/文件上传 ─────────────────────────────────────────────────────────────
 const uploading = ref(false);
 const dragOver  = ref(false);
 const lastUploadPath = ref('');
+
+// 始终把焦点还给 xterm 的内部 textarea
+function focusTerm() {
+  const ta = termRef.value?.querySelector('.xterm-helper-textarea');
+  if (ta) ta.focus();
+}
 
 function shortPath(p) {
   return p.split('/').slice(-2).join('/');
 }
 
 async function uploadFile(file) {
-  if (!file || !file.type.startsWith('image/')) return;
+  if (!file) return;
   uploading.value = true;
   lastUploadPath.value = '';
   try {
     const buf = await file.arrayBuffer();
-    const ext = file.name.match(/\.[^.]+$/)?.[0] || '.png';
     const res = await fetch('/api/upload', {
       method: 'POST',
       headers: {
@@ -88,12 +95,13 @@ async function uploadFile(file) {
     if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
     const { path: filePath } = await res.json();
     lastUploadPath.value = filePath;
-    // 自动把路径输入到终端（加空格分隔，方便连续上传多张）
     emit('input', filePath + ' ');
   } catch (e) {
     console.error('Upload error:', e);
   } finally {
     uploading.value = false;
+    // 上传完成后立即把焦点还给终端
+    nextTick(() => focusTerm());
   }
 }
 
@@ -109,7 +117,6 @@ function onDrop(e) {
   files.forEach(uploadFile);
 }
 
-// 拦截剪贴板粘贴图片（不影响文字粘贴）
 function onTerminalPaste(e) {
   const items = Array.from(e.clipboardData?.items || []);
   const imageItem = items.find(i => i.type.startsWith('image/'));
@@ -118,7 +125,6 @@ function onTerminalPaste(e) {
     const file = imageItem.getAsFile();
     if (file) uploadFile(file);
   }
-  // 文字粘贴由 Terminal 原有逻辑处理
 }
 let awaitingPaste = false;
 
@@ -194,6 +200,9 @@ onMounted(() => {
   term.open(termRef.value);
 
   if (wrapRef.value) wrapRef.value.style.background = td.bg;
+
+  // terminal open 后立即聚焦，确保键盘输入直接进 xterm
+  nextTick(() => focusTerm());
 
   // 监听 viewport scroll 检测用户是否上划
   // xterm 渲染后 viewport 元素才存在，用 MutationObserver 等它出现

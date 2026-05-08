@@ -39,6 +39,20 @@ This is not screenshots or log forwarding. It is **true bidirectional real-time 
 
 ---
 
+## Upload Files / Images to Claude
+
+The web terminal toolbar provides a **＋** button that supports three ways to pass files to Claude:
+
+| Method | How |
+|--------|-----|
+| Click to select | Click the **＋** button below the terminal, choose any file or image |
+| Drag & drop | Drag files directly onto the terminal area |
+| Paste image | Screenshot then Ctrl+V (auto-uploads) |
+
+Files are stored to `~/.rcc/uploads/` on the server, and the path is automatically typed at the terminal cursor — just press Enter or continue your Claude command.
+
+---
+
 ## How Real-Time Sync Works
 
 ```
