@@ -227,15 +227,12 @@ onMounted(() => {
   });
 
   // ── 复制：Ctrl+Shift+C 或右键 Copy ──────────────────────────────────────
-  // xterm 默认 Ctrl+C 会发 SIGINT，用 Ctrl+Shift+C 复制
   term.attachCustomKeyEventHandler(e => {
-    // Ctrl+Shift+C → 复制选中内容
     if (e.type === 'keydown' && e.ctrlKey && e.shiftKey && e.code === 'KeyC') {
       const sel = term.getSelection();
       if (sel) copyText(sel);
-      return false; // 阻止传递给 PTY
+      return false;
     }
-    // Ctrl+Shift+V → 粘贴
     if (e.type === 'keydown' && e.ctrlKey && e.shiftKey && e.code === 'KeyV') {
       doPaste();
       return false;

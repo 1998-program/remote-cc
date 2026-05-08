@@ -403,6 +403,12 @@ function handleMessage(ws, wsId, raw) {
 
   let msg;
   try { msg = JSON.parse(raw); } catch (_) {
+    msg = null;
+  }
+
+  // 如果解析失败，或解析结果不是带 type 字段的对象（例如 "1" 被 JSON.parse 解析为数字 1）
+  // 则视为原始 PTY 输入（raw string）
+  if (!msg || typeof msg !== 'object' || !msg.type) {
     // Raw string → PTY input
     const entry = wsToSession.get(wsId);
     const session = entry && sessions.get(entry.sessionId);
@@ -413,8 +419,6 @@ function handleMessage(ws, wsId, raw) {
     }
     return;
   }
-
-  if (!msg || !msg.type) return;
 
   const entry   = wsToSession.get(wsId);
   const session = entry && sessions.get(entry.sessionId);
