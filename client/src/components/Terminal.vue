@@ -36,7 +36,9 @@
       </div>
       <!-- 隐藏 input 用于接收系统粘贴事件 -->
       <input ref="pasteInputRef" class="paste-trap" type="text"
-        @paste="onTrapPaste" @blur="onTrapBlur" />
+        @paste="onTrapPaste"
+        @blur="onTrapBlur"
+        @keydown="onTrapKeydown" />
     </Teleport>
   </div>
 </template>
@@ -388,10 +390,24 @@ function onTrapPaste(e) {
   const text = e.clipboardData?.getData('text');
   if (text) emit('paste', text);
   e.preventDefault();
-  // return focus to terminal
-  nextTick(() => termRef.value?.querySelector('.xterm-helper-textarea')?.focus());
+  nextTick(() => focusTerm());
 }
-function onTrapBlur() { awaitingPaste = false; }
+function onTrapBlur() {
+  awaitingPaste = false;
+  // 焦点离开 paste-trap 时立即还给 xterm
+  nextTick(() => focusTerm());
+}
+// paste-trap 收到非粘贴按键时（用户直接打字），把焦点和输入转发给 xterm
+function onTrapKeydown(e) {
+  if (e.key === 'v' && (e.ctrlKey || e.metaKey)) return; // 允许 Ctrl+V 完成粘贴
+  // 其他任何键：把输入转发给 PTY，焦点归还 xterm
+  awaitingPaste = false;
+  pasteInputRef.value.value = '';
+  e.preventDefault();
+  // 将这次按键作为 PTY 输入发送
+  if (e.key.length === 1) emit('input', e.key);
+  nextTick(() => focusTerm());
+}
 function ctxSelectAll() { ctxMenu.show = false; term?.selectAll(); }
 function ctxClear()     { ctxMenu.show = false; term?.clear(); }
 </script>
