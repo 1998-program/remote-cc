@@ -28,14 +28,14 @@ Claude Code 是跑在终端里的 AI 编程助手，功能强大，但只能在�
 
 ## 核心特性
 
-- **真实终端** — PTY + xterm.js，颜色/交互/鼠标全支持
-- **实时多端同步** — 同一 PTY 进程广播给所有连接端，零延迟
-- **持久会话** — 类 tmux 架构，关闭浏览器/断开 SSH 不中断
-- **历史恢复** — 读取 `~/.claude/projects/`，随时 `--resume` 继续上次对话
-- **文件浏览器** — Web 端浏览服务器文件、预览代码/图片、复制路径，双击全屏阅读
-- **本地 TUI** — `rcc-tui` 交互式终端界面，无需浏览器，无需登录
-- **多端断开快捷键** — `Ctrl+]` 随时从任意端脱离，PTY 不受影响
-- **移动端优化** — 响应式 UI，CC/SH 双模式快捷键栏
+- **真实终端** — 颜色、交互、鼠标全支持，和直接在本机用没有区别
+- **实时多端同步** — 手机、平板、电脑同时接入同一个 Claude 会话
+- **持久会话** — 关闭浏览器或断开 SSH，Claude 在后台继续跑，随时reconnect
+- **历史恢复** — 读取 `~/.claude/projects/`，随时 resume 继续上次对话
+- **文件浏览器** — 在 Web 端直接浏览服务器上的文件，预览代码/图片，复制路径
+- **终端管理界面** — 在服务器上直接运行 `remotecc`，弹出可视化菜单管理所有会话
+- **多端断开快捷键** — `Ctrl+]` 随时脱离当前会话回菜单，不终止 Claude
+- **移动端优化** — 响应式 UI，手机上也能舒适操作
 - **丰富主题** — 9 套颜色主题 + 3 种 UI 风格
 
 ---
@@ -107,14 +107,11 @@ bash install.sh
 安装完成后：
 
 ```bash
-remotecc start          # 启动服务
+remotecc start     # 启动服务
+remotecc           # 弹出可视化菜单，管理会话
 ```
 
-浏览器打开 `http://<IP>:8310`，或直接用终端：
-
-```bash
-rcc-tui            # 本地交互式界面（推荐）
-```
+浏览器打开 `http://<服务器IP>:8310` 也可以使用。
 
 ---
 
@@ -124,17 +121,17 @@ rcc-tui            # 本地交互式界面（推荐）
 # 服务管理
 remotecc start          # 启动服务（守护进程，崩溃自动重启）
 remotecc stop           # 停止服务
-remotecc restart        # 完整重启（更新 server/ 后用）
-remotecc reload         # 热重载（仅更新前端/API，不断会话）
-remotecc update         # 拉取最新代码并自动重启/热重载
-remotecc status         # 查看服务状态
+remotecc restart        # 完整重启（更新后需要用）
+remotecc reload         # 热重载（不断开正在进行的会话）
+remotecc update         # 拉取最新版本，自动重启/热重载
+remotecc status         # 查看服务是否在运行
 
-# 使用
-remotecc                # 进入 TUI 界面（推荐）
-remotecc attach <name>  # 直接在 TUI 内接入指定会话
+# 日常使用（在服务器终端里运行）
+remotecc                # 弹出可视化菜单，查看/进入/新建会话
+remotecc attach <名称>  # 直接进入指定名称的会话
 ```
 
-在任意会话内：**`Ctrl+]`** 断开回菜单，不终止 Claude 进程。
+在任意会话内：**`Ctrl+]`** 退回菜单，不终止 Claude 进程。
 
 ---
 
@@ -143,16 +140,16 @@ remotecc attach <name>  # 直接在 TUI 内接入指定会话
 ### 2026-05-12
 
 - **文件浏览器**：Web 界面新增文件浏览功能，支持代码/图片预览、双击全屏、复制路径
-- **热重载架构**：服务拆分为 proxy.js（常驻）和 app.js（可热重启），`remotecc reload` 不断会话
-- **remotecc update**：自动检测变更类型，server 变更自动 restart，仅前端变更自动 reload
-- **remotecc attach**：进入 TUI 界面，支持 `attach <name>` 直接接入指定会话
-- **401 自动跳登录页**：服务重启后 token 失效，浏览器自动跳回登录页，不再白屏
+- **热重载**：`remotecc reload` 仅重启业务层，不断开正在进行的 Claude 会话
+- **remotecc update**：一键更新，自动判断是否需要重启
+- **remotecc attach**：直接进入指定会话，断开后回到菜单而非退出终端
+- **登录页跳转**：服务重启后浏览器自动跳回登录页，不再白屏
 
 ---
 
 ## 截图
 
-> Web 终端 · 会话管理 · rcc-tui · 移动端
+> Web 终端 · 会话管理 · 文件浏览器 · 移动端
 
 （欢迎贡献截图 🙏）
 
