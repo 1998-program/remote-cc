@@ -770,7 +770,46 @@ process.on('exit', () => {
   try { if (process.stdin.isTTY) process.stdin.setRawMode(false); wr(A.show); } catch (_) {}
 });
 
-pageMain().catch(err => {
+// ── 命令行参数处理 ────────────────────────────────────────────────────────────
+// rcc-tui --attach <name|id>  直接接入指定会话
+const attachArg = (() => {
+  const i = process.argv.indexOf('--attach');
+  return i !== -1 ? process.argv[i + 1] : null;
+})();
+
+async function startTui() {
+  if (attachArg) {
+    const meta = loadMeta();
+    const s = meta.find(m =>
+      m.name === attachArg ||
+      m.sessionId === attachArg ||
+      m.sessionId.startsWith(attachArg)
+    );
+    if (s && s.alive && sockAlive(s.sessionId)) {
+      // doAttach 内部会 removeAllListeners('data')，导致 readline.emitKeypressEvents
+      // 注册的内部 data 监听器被删除，onDetach 后 menu() 的 keypress 无法触发。
+      // 断开后重新注册，确保 pageMain 的 menu() 能正常响应键盘。
+      const onDetach = () => {
+        readline.emitKeypressEvents(process.stdin);
+        pageMain().catch(err => {
+          wr(A.show + '\n' + A.red + '  错误: ' + err.message + A.R + '\n');
+          process.exit(1);
+        });
+      };
+      doAttach(sockPath(s.sessionId), s.name, onDetach, s.sessionId);
+      return;
+    }
+    // 找不到或不可用，提示后进主页
+    wr(A.clear);
+    await notice(
+      s ? `会话 "${s.name}" 不可接入（无 socket）` : `找不到会话: ${attachArg}`,
+      A.yellow, 1800
+    );
+  }
+  return pageMain();
+}
+
+startTui().catch(err => {
   wr(A.show + '\n' + A.red + '  错误: ' + err.message + A.R + '\n');
   console.error(err.stack);
   process.exit(1);

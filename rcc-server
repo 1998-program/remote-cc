@@ -1,7 +1,13 @@
 #!/bin/bash
 # rcc-server: 启动并守护 Remote Claude Code 服务
-# 用法: rcc-server [start|stop|restart|status|log]
-# 进程退出后自动重启
+# 用法: rcc-server [start|stop|restart|reload|status|log]
+#
+#   start   — 启动 proxy.js（长期常驻，内部管理 app.js 子进程）
+#   stop    — 完全停止（WS 断开，PTY 终止）
+#   restart — stop + start
+#   reload  — 热重载 app.js（WS/PTY 不中断，发送 SIGUSR2 给 proxy）
+#   status  — 查看状态
+#   log     — 实时日志
 
 RCC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SERVER_DIR="$RCC_DIR/server"
@@ -10,7 +16,6 @@ LOG_FILE="/tmp/rcc.log"
 
 # 优先从 .env 加载配置
 if [[ -f "$RCC_DIR/.env" ]]; then
-  # 只导出非注释、非空行的 KEY=VALUE
   set -a
   # shellcheck disable=SC1090
   source <(grep -E '^[A-Z_]+=.' "$RCC_DIR/.env")
@@ -34,57 +39,80 @@ is_running() {
 
 do_start() {
   if is_running; then
-    echo "rcc-server already running (pid $(cat $PID_FILE))"
+    echo "Already running (pid $(cat $PID_FILE))"
     return 0
   fi
 
-  echo "Starting rcc-server on port $PORT..."
+  echo "Starting on port $PORT..."
 
-  # Watchdog loop
+  # Watchdog loop：proxy.js 意外退出时自动重启（热重载不会触发，仅异常退出）
   (
     while true; do
       export RC_USER RC_PASS PORT
       [[ -n "$CLAUDE_BIN"   ]] && export CLAUDE_BIN
       [[ -n "$IS_SANDBOX"   ]] && export IS_SANDBOX
-      "$NODE" "$SERVER_DIR/index.js" >> "$LOG_FILE" 2>&1
+      "$NODE" "$SERVER_DIR/proxy.js" >> "$LOG_FILE" 2>&1
       EXIT=$?
-      echo "[$(date '+%Y-%m-%d %H:%M:%S')] rcc-server exited (code $EXIT), restarting in 3s..." >> "$LOG_FILE"
+      echo "[$(date '+%Y-%m-%d %H:%M:%S')] exited (code $EXIT), restarting in 3s..." >> "$LOG_FILE"
       sleep 3
     done
   ) &
 
   WATCHDOG_PID=$!
   echo $WATCHDOG_PID > "$PID_FILE"
-  echo "Started (watchdog pid $WATCHDOG_PID), log: $LOG_FILE"
+  echo "Started. Log: $LOG_FILE"
 }
 
 do_stop() {
   if ! is_running; then
-    echo "rcc-server not running"
+    echo "Not running."
     rm -f "$PID_FILE"
   else
     PID=$(cat "$PID_FILE")
-    echo "Stopping rcc-server (pid $PID)..."
-    # Kill the watchdog and all its children
+    echo "Stopping (pid $PID)..."
     pkill -P "$PID" 2>/dev/null
     kill "$PID" 2>/dev/null
     rm -f "$PID_FILE"
     echo "Stopped."
   fi
-  # 兜底：清理所有残留的 node index.js 进程（包括 install.sh 直接启动的）
-  pkill -f "node.*index.js" 2>/dev/null || true
+  # 兜底：清理所有残留的 node proxy/index/app 进程（含历史遗留 watchdog 下的子进程）
+  pkill -f "remote_cc/server/proxy\.js" 2>/dev/null || true
+  pkill -f "remote_cc/server/index\.js" 2>/dev/null || true
+  pkill -f "remote_cc/server/app\.js"   2>/dev/null || true
+  # 等进程真正退出，避免 restart 时端口还被占用
+  sleep 1
   rm -f "$HOME/.rcc/local.token" "$HOME/.rcc/server.lock"
+}
+
+do_reload() {
+  # 热重载：只重启 app.js，WS/PTY 不中断
+  # proxy.js 的 PID 存在 lock 文件里（由 proxy.js 写入）
+  LOCK_FILE="$HOME/.rcc/server.lock"
+  if [[ ! -f "$LOCK_FILE" ]]; then
+    echo "Service is not running. Use: rcc-server start"
+    exit 1
+  fi
+  PROXY_PID="$(node -e "try{process.stdout.write(String(JSON.parse(require('fs').readFileSync('$LOCK_FILE'))?.pid||''))}catch(e){}" 2>/dev/null)"
+  if [[ -z "$PROXY_PID" ]]; then
+    echo "Could not read service PID. Try: rcc-server restart"
+    exit 1
+  fi
+  if ! kill -0 "$PROXY_PID" 2>/dev/null; then
+    echo "Service is not running. Use: rcc-server start"
+    exit 1
+  fi
+  kill -SIGUSR2 "$PROXY_PID"
+  echo "Reloading... (WS connections and Claude sessions unaffected)"
+  echo "Refresh browser when done."
 }
 
 do_status() {
   if is_running; then
     PID=$(cat "$PID_FILE")
-    echo "rcc-server running (watchdog pid $PID) on port $PORT"
-    echo "Log: $LOG_FILE"
-    # Show the actual node process
-    pgrep -a node 2>/dev/null | grep "index.js" | head -3
+    echo "Running on port $PORT (pid $PID). Log: $LOG_FILE"
+    pgrep -a node 2>/dev/null | grep -E "proxy\.js|index\.js" | head -5
   else
-    echo "rcc-server not running"
+    echo "Not running."
   fi
 }
 
@@ -96,10 +124,19 @@ case "$cmd" in
   start)   do_start   ;;
   stop)    do_stop    ;;
   restart) do_stop; sleep 1; do_start ;;
+  reload)  do_reload  ;;
   status)  do_status  ;;
   log)     do_log     ;;
   *)
-    echo "Usage: rcc-server [start|stop|restart|status|log]"
+    echo "Usage: rcc-server [start|stop|restart|reload|status|log]"
+    echo ""
+    echo "  start   — 启动服务（proxy.js 常驻，管理 app.js 子进程）"
+    echo "  stop    — 完全停止服务"
+    echo "  restart — 完全重启（WS 断开，PTY 终止）"
+    echo "  reload  — 热重载 app.js（WS/PTY 不中断）"
+    echo "  status  — 查看运行状态"
+    echo "  log     — 实时查看日志"
     exit 1
     ;;
 esac
+

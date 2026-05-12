@@ -74,41 +74,41 @@ export const COLOR_THEMES = [
   // ── 深色主题 ──────────────────────────────────
   {
     id: 'cyber', name: 'Cyber', accent: '#00ffd5', dark: true,
-    icons: { home: '⌂', settings: '⚙', kill: '⏹', delete: '✕', log: '≡', new: '＋', status_live: '◉', status_dead: '○', spinner: '◌', empty: '⬡', chevron: '▾', attach: '⬡' },
+    icons: { home: '⌂', settings: '⚙', kill: '⏹', delete: '✕', log: '≡', new: '＋', status_live: '◉', status_dead: '○', spinner: '◌', empty: '⬡', chevron: '▾', attach: '⬡', files: '⊞' },
   },
   {
     id: 'mocha', name: 'Mocha', accent: '#cba6f7', dark: true,
-    icons: { home: '⌂', settings: '⚙', kill: '▪', delete: '✖', log: '☰', new: '✦', status_live: '●', status_dead: '◌', spinner: '◌', empty: '✿', chevron: '▾', attach: '⬡' },
+    icons: { home: '⌂', settings: '⚙', kill: '▪', delete: '✖', log: '☰', new: '✦', status_live: '●', status_dead: '◌', spinner: '◌', empty: '✿', chevron: '▾', attach: '⬡', files: '⊞' },
   },
   {
     id: 'gruvbox', name: 'Gruvbox', accent: '#fabd2f', dark: true,
-    icons: { home: '⌂', settings: '⚙', kill: '■', delete: '✗', log: '≡', new: '+', status_live: '◆', status_dead: '◇', spinner: '○', empty: '◇', chevron: '▾', attach: '⬡' },
+    icons: { home: '⌂', settings: '⚙', kill: '■', delete: '✗', log: '≡', new: '+', status_live: '◆', status_dead: '◇', spinner: '○', empty: '◇', chevron: '▾', attach: '⬡', files: '⊞' },
   },
   {
     id: 'nord', name: 'Nord', accent: '#88c0d0', dark: true,
-    icons: { home: '❄', settings: '⚙', kill: '⏹', delete: '✕', log: '≡', new: '＋', status_live: '●', status_dead: '◌', spinner: '◌', empty: '❄', chevron: '▾', attach: '⬡' },
+    icons: { home: '❄', settings: '⚙', kill: '⏹', delete: '✕', log: '≡', new: '＋', status_live: '●', status_dead: '◌', spinner: '◌', empty: '❄', chevron: '▾', attach: '⬡', files: '⊞' },
   },
   {
     id: 'dracula', name: 'Dracula', accent: '#ff79c6', dark: true,
-    icons: { home: '♦', settings: '⚙', kill: '⏹', delete: '✕', log: '☰', new: '✧', status_live: '♥', status_dead: '♡', spinner: '◌', empty: '♦', chevron: '▾', attach: '⬡' },
+    icons: { home: '♦', settings: '⚙', kill: '⏹', delete: '✕', log: '☰', new: '✧', status_live: '♥', status_dead: '♡', spinner: '◌', empty: '♦', chevron: '▾', attach: '⬡', files: '⊞' },
   },
   {
     id: 'solarized', name: 'Solarized', accent: '#268bd2', dark: true,
-    icons: { home: '⌂', settings: '⚙', kill: '⏹', delete: '✕', log: '≡', new: '＋', status_live: '◉', status_dead: '○', spinner: '◌', empty: '◈', chevron: '▾', attach: '⬡' },
+    icons: { home: '⌂', settings: '⚙', kill: '⏹', delete: '✕', log: '≡', new: '＋', status_live: '◉', status_dead: '○', spinner: '◌', empty: '◈', chevron: '▾', attach: '⬡', files: '⊞' },
   },
 
   // ── 浅色主题 ──────────────────────────────────
   {
     id: 'latte', name: 'Latte', accent: '#8839ef', dark: false,
-    icons: { home: '⌂', settings: '⚙', kill: '▪', delete: '✖', log: '☰', new: '＋', status_live: '●', status_dead: '◌', spinner: '◌', empty: '✿', chevron: '▾', attach: '⬡' },
+    icons: { home: '⌂', settings: '⚙', kill: '▪', delete: '✖', log: '☰', new: '＋', status_live: '●', status_dead: '◌', spinner: '◌', empty: '✿', chevron: '▾', attach: '⬡', files: '⊞' },
   },
   {
     id: 'paper', name: 'Paper', accent: '#1a73e8', dark: false,
-    icons: { home: '⌂', settings: '⚙', kill: '□', delete: '×', log: '≡', new: '+', status_live: '■', status_dead: '□', spinner: '○', empty: '○', chevron: '›', attach: '⊕' },
+    icons: { home: '⌂', settings: '⚙', kill: '□', delete: '×', log: '≡', new: '+', status_live: '■', status_dead: '□', spinner: '○', empty: '○', chevron: '›', attach: '⊕', files: '⊞' },
   },
   {
     id: 'day', name: 'Day', accent: '#0969da', dark: false,
-    icons: { home: '⌂', settings: '⚙', kill: '⏹', delete: '✕', log: '≡', new: '＋', status_live: '●', status_dead: '○', spinner: '◌', empty: '◌', chevron: '▾', attach: '⬡' },
+    icons: { home: '⌂', settings: '⚙', kill: '⏹', delete: '✕', log: '≡', new: '＋', status_live: '●', status_dead: '○', spinner: '◌', empty: '◌', chevron: '▾', attach: '⬡', files: '⊞' },
   },
 ];
 

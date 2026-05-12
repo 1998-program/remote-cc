@@ -8,6 +8,7 @@ const { v4: uuidv4 } = require('uuid');
 const { httpAuth, wsAuth, loginHandler } = require('./auth');
 const { getProjects, getSessions, readSession } = require('./history');
 const { handleMessage, closeWS, listSessions, readLog, registerWS, unregisterWS } = require('./pty-manager');
+const { listDir, readFilePreview, statFile } = require('./fs-handler');
 
 const PORT = parseInt(process.env.PORT || 3000);
 
@@ -111,6 +112,40 @@ app.get('/api/session-log/:sessionId', (req, res) => {
   const log = readLog(req.params.sessionId);
   if (log === null) return res.status(404).json({ error: 'Not found' });
   res.type('text/plain').send(log);
+});
+
+// ── 文件系统 API ───────────────────────────────────────────────────────────────
+app.get('/api/fs/list', (req, res) => {
+  try {
+    const result = listDir(req.query.path || '~', req.query.hidden === 'true');
+    res.json(result);
+  } catch (e) {
+    res.status(e.message.startsWith('Access denied') ? 403 : 400).json({ error: e.message });
+  }
+});
+
+app.get('/api/fs/read', (req, res) => {
+  try {
+    const maxBytes = parseInt(req.query.maxBytes) || 102400;
+    const result = readFilePreview(req.query.path || '', maxBytes);
+    res.json(result);
+  } catch (e) {
+    res.status(e.message.startsWith('Access denied') ? 403 : 400).json({ error: e.message });
+  }
+});
+
+app.get('/api/fs/stat', (req, res) => {
+  try {
+    res.json(statFile(req.query.path || ''));
+  } catch (e) {
+    res.status(e.message.startsWith('Access denied') ? 403 : 400).json({ error: e.message });
+  }
+});
+
+
+// 未匹配的 /api/* 返回 404
+app.all('/api/*', (req, res) => {
+  res.status(404).json({ error: 'Not found' });
 });
 
 // ── SPA fallback ──────────────────────────────────────────────────────────────

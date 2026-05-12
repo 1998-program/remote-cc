@@ -33,18 +33,16 @@ const LOCAL_TOKEN_FILE = path.join(os.homedir(), '.rcc', 'local.token');
 function initLocalToken() {
   const tok = genToken();
   tokens.set(tok, Date.now() + 365 * 24 * 60 * 60 * 1000); // 1年有效
-  try {
-    fs.mkdirSync(path.dirname(LOCAL_TOKEN_FILE), { recursive: true });
-    fs.writeFileSync(LOCAL_TOKEN_FILE, tok, { mode: 0o600 });
-  } catch (_) {}
+  // 写入文件延迟到 proxy 确认端口监听成功后（由 proxy.js 调用 writeLocalToken）
+  // 避免 watchdog 重试期间多个进程竞争写入不同 token
   return tok;
 }
 
 // 启动时立即生成本地 token
 const LOCAL_TOKEN = initLocalToken();
 
-// 进程退出时清除本地 token 文件
-process.on('exit', () => { try { fs.unlinkSync(LOCAL_TOKEN_FILE); } catch (_) {} });
+// 注意：local.token 由 rcc-server stop 脚本负责清理
+// 这里不在 exit 时删除，避免 watchdog 重启时短暂消失导致 rcc-tui 读到无效 token
 
 // POST /api/login → { token }
 function loginHandler(req, res) {
@@ -72,4 +70,9 @@ function wsAuth(req) {
   return validateToken(tok);
 }
 
-module.exports = { httpAuth, wsAuth, loginHandler };
+module.exports = { httpAuth, wsAuth, loginHandler, validateTokenExported: validateToken, createTokenExported: createToken, LOCAL_TOKEN_FILE, LOCAL_TOKEN, writeLocalToken: () => {
+  try {
+    fs.mkdirSync(path.dirname(LOCAL_TOKEN_FILE), { recursive: true });
+    fs.writeFileSync(LOCAL_TOKEN_FILE, LOCAL_TOKEN, { mode: 0o600 });
+  } catch (_) {}
+} };

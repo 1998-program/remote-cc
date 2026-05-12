@@ -189,14 +189,15 @@ function printHelp() {
   ${C.b}服务管理${C.r}
     ${C.c}remotecc start${C.r}            启动服务（守护进程，崩溃自动重启）
     ${C.c}remotecc stop${C.r}             停止服务
-    ${C.c}remotecc restart${C.r}          重启服务
+    ${C.c}remotecc restart${C.r}          重启服务（断 WS/PTY）
+    ${C.c}remotecc reload${C.r}           热重载业务层（WS/PTY 不中断）
     ${C.c}remotecc status${C.r}           查看服务运行状态
     ${C.c}remotecc update${C.r}           更新到最新版本（git pull + 重新构建）
 
   ${C.b}会话管理${C.r}
+    ${C.c}remotecc${C.r}                  进入 TUI 界面（等同于 rcc-tui）
+    ${C.c}remotecc attach${C.r}           进入 TUI 界面
     ${C.c}remotecc ls${C.r}               列出所有会话
-    ${C.c}remotecc attach${C.r}           接入唯一活跃会话
-    ${C.c}remotecc attach <name|id>${C.r}  按名称或 ID 接入会话
     ${C.c}remotecc log <name|id>${C.r}     实时查看会话日志（tail -f）
 
   ${C.b}交互式界面${C.r}
@@ -218,13 +219,22 @@ switch (cmd) {
     break;
   case 'ls':
   case 'list':
-  case undefined:
     listSessions();
     break;
   case 'attach':
   case 'a':
-    attachCmd(arg);
+  case undefined: {
+    // attach 和无参数直接进 rcc-tui，有 <name> 则透传直接接入会话
+    const tuiPath = require('path').join(__dirname, 'rcc-tui');
+    const tuiArgs = arg ? [tuiPath, '--attach', arg] : [tuiPath];
+    try {
+      require('child_process').execFileSync(
+        process.execPath, tuiArgs,
+        { stdio: 'inherit' }
+      );
+    } catch (e) { process.exit(e.status || 0); }
     break;
+  }
   case 'log':
   case 'l':
     if (!arg) { console.error('Usage: remotecc log <name|id>'); process.exit(1); }
@@ -233,6 +243,7 @@ switch (cmd) {
   case 'start':
   case 'stop':
   case 'restart':
+  case 'reload':
   case 'status':
     // 转发给 rcc-server
     try {
@@ -254,19 +265,18 @@ switch (cmd) {
 
     console.log(`\n  ${C.cyan}RemoteCC 更新${C.reset}\n`);
 
-    // 1. 记录更新前的 server/ 文件 hash，用来判断是否需要重启
+    // 1. 记录更新前的关键文件 hash（server/ + 脚本文件），判断是否需要重启
+    const RESTART_PATHS = 'server/ rcc-server remotecc rcc-tui';
     let serverHashBefore = '';
-    try {
-      serverHashBefore = pipe('git ls-files -s server/').toString();
-    } catch (_) {}
+    try { serverHashBefore = pipe('git ls-files -s ' + RESTART_PATHS).toString(); } catch (_) {}
 
     // 2. git pull
     try { run('git pull --rebase origin main'); ok('代码已更新'); }
     catch (_) { err('git pull 失败，请检查网络或手动执行: git pull --rebase origin main'); }
 
-    // 3. 判断 server/ 是否有变更
+    // 3. 判断是否有需要重启的文件变更
     let serverHashAfter = '';
-    try { serverHashAfter = pipe('git ls-files -s server/').toString(); } catch (_) {}
+    try { serverHashAfter = pipe('git ls-files -s ' + RESTART_PATHS).toString(); } catch (_) {}
     const serverChanged = serverHashBefore !== serverHashAfter;
 
     // 4. 服务端依赖（仅 server/ 有变化时安装）
@@ -278,24 +288,41 @@ switch (cmd) {
       } catch (e) { console.log(''); err('npm install (server) 失败: ' + e.message); }
     }
 
-    // 5. 前端构建（前端变了就重新构建，无需重启服务——Express 直接 serve dist/）
+    // 5. 前端构建
     process.stdout.write('  构建前端...');
     try {
       execSync('npm install --loglevel=error', { cwd: path.join(dir, 'client'), stdio: 'pipe' });
       execSync('npm run build', { cwd: path.join(dir, 'client'), stdio: 'pipe' });
       console.log(' ✓');
-      ok('前端已热更新（刷新浏览器即可，无需重启服务）');
     } catch (e) { console.log(''); err('前端构建失败: ' + e.message); }
 
-    // 6. 根据是否有 server 变更决定是否需要重启
+    // 6. 根据变更类型决定后续动作
     let serviceRunning = false;
     try { execSync(path.join(dir, 'rcc-server') + ' status', { stdio: 'pipe' }); serviceRunning = true; } catch (_) {}
 
-    if (serverChanged && serviceRunning) {
-      warn('server/ 有变更，需要重启服务才能生效');
-      console.log(`\n  执行: ${C.cyan}remotecc restart${C.reset}\n`);
-    } else if (!serverChanged) {
-      ok('无服务端变更，前端和工具脚本已热更新，无需重启服务 🎉');
+    if (serverChanged) {
+      // server/ 或脚本有变更，必须完整重启
+      if (serviceRunning) {
+        warn('服务端有更新，正在重启服务...');
+        try {
+          execSync(path.join(dir, 'rcc-server') + ' restart', { stdio: 'inherit' });
+          ok('服务已重启，刷新浏览器即可 🎉');
+        } catch (_) {
+          warn('自动重启失败，请手动执行: remotecc restart');
+        }
+      } else {
+        ok('更新完成。启动服务: remotecc start');
+      }
+    } else if (serviceRunning) {
+      // 仅前端变更，热重载即可
+      try {
+        execSync(path.join(dir, 'rcc-server') + ' reload', { stdio: 'pipe' });
+        ok('服务已热重载，刷新浏览器即可 🎉');
+      } catch (_) {
+        ok('前端已更新，请刷新浏览器（或执行 remotecc reload）');
+      }
+    } else {
+      ok('更新完成。启动服务: remotecc start');
     }
     break;
   }

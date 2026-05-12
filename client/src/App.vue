@@ -77,6 +77,11 @@
             @click="view = 'home'" title="主页">
             {{ icons.home }}
           </button>
+          <!-- Files -->
+          <button class="topbar-icon-btn" :class="{ active: view === 'files' }"
+            @click="toggleOverlay('files')" title="文件浏览">
+            {{ icons.files }}
+          </button>
           <!-- Settings -->
           <button class="topbar-icon-btn" :class="{ active: view === 'settings' }"
             @click="toggleOverlay('settings')" title="设置">
@@ -128,6 +133,14 @@
           <HelpPage />
         </div>
 
+        <!-- ── Files ─────────────────────────────────────────────────── -->
+        <div v-show="view === 'files'" class="files-view">
+          <FileBrowser
+            :initialPath="currentMeta?.workingDir || ''"
+            @close="toggleOverlay('files')"
+          />
+        </div>
+
         <!-- ── Terminals (always in DOM, v-show to switch) ───────────── -->
         <div v-show="view === 'terminal'" class="terminal-view">
           <Terminal
@@ -163,13 +176,14 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue';
-import { login, isLoggedIn, getSavedUsername, createWS, api } from './api/index.js';
+import { login, isLoggedIn, getSavedUsername, createWS, api, setUnauthorizedHandler } from './api/index.js';
 import Terminal          from './components/Terminal.vue';
 import LogViewer         from './components/LogViewer.vue';
 import ConversationList  from './components/ConversationList.vue';
 import NewConversation   from './components/NewConversation.vue';
 import SettingsPage      from './components/SettingsPage.vue';
 import HelpPage          from './components/HelpPage.vue';
+import FileBrowser       from './components/FileBrowser.vue';
 import { settings, COLOR_THEMES, getIcons } from './settings.js';
 import { useI18n } from './i18n.js';
 import { route, navigate } from './router.js';
@@ -220,7 +234,12 @@ function initControlWS() {
       if (msg.type === 'session_list') sessionList.value = msg.sessions;
     } catch (_) {}
   };
-  controlWS.onclose   = () => { wsReady.value = false; reconnTimer = setTimeout(initControlWS, 3000); };
+  controlWS.onclose   = () => {
+    wsReady.value = false;
+    // WS 断开时验证 token 是否仍有效；401 会由 setUnauthorizedHandler 处理
+    api.getActiveSessions().catch(() => {});
+    reconnTimer = setTimeout(initControlWS, 3000);
+  };
   controlWS.onerror   = () => {};
 }
 
@@ -520,6 +539,18 @@ function doLogout() {
   settings.username = '';
 }
 
+// token 失效时（服务重启等）自动回到登录页
+setUnauthorizedHandler(() => {
+  authed.value = false;
+  view.value = 'home';
+  // 清理所有 WS 连接
+  clearTimeout(reconnTimer);
+  controlWS?.close();
+  for (const entry of termList) entry._destroy?.();
+  termList.splice(0);
+  sessionList.value = [];
+});
+
 // Terminal event handlers
 function onTermInput(sid, data) {
   const entry = findEntry(sid);
@@ -537,6 +568,22 @@ function onTermResize(sid, { cols, rows }) {
 function onTermPaste(sid, text) {
   const entry = findEntry(sid);
   if (entry?.ws?.readyState === WebSocket.OPEN) entry.ws.send(text);
+}
+
+// 文件浏览器 → 向当前活跃终端发送文本（如 cd 命令）
+function sendToActiveTerminal(text) {
+  const sid = activeSessionId.value;
+  if (!sid) {
+    // 没有活跃会话，切到 terminal/home 提示
+    prevView.value = view.value;
+    view.value = 'home';
+    return;
+  }
+  const entry = findEntry(sid);
+  if (entry?.ws?.readyState === WebSocket.OPEN) {
+    entry.ws.send(text);
+    view.value = 'terminal';
+  }
 }
 function setTermRef(sid, el) {
   if (el) termRefs[sid] = el;
@@ -988,7 +1035,7 @@ body { font-family: 'JetBrains Mono', monospace; }
   max-height: calc(var(--vvh, 100dvh) - 44px);
 }
 
-.home-view, .new-view, .log-view, .settings-view, .help-view {
+.home-view, .new-view, .log-view, .settings-view, .help-view, .files-view {
   flex: 1; overflow: auto; display: flex; flex-direction: column;
 }
 

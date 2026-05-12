@@ -13,79 +13,96 @@
 │                     客户端 (Browser)                     │
 │  Vue 3 + xterm.js + WebSocket                           │
 └──────────────────────┬──────────────────────────────────┘
-                       │ WebSocket (ws/wss)
+                       │ HTTP / WebSocket
 ┌──────────────────────▼──────────────────────────────────┐
-│                  服务端 (Node.js)                        │
-│  Express + ws + node-pty                                │
-│  ┌─────────────┐  ┌──────────────┐  ┌───────────────┐  │
-│  │  auth.js    │  │ pty-manager  │  │  history.js   │  │
-│  │ Token 认证  │  │  PTY 会话池  │  │  历史对话读取  │  │
-│  └─────────────┘  └──────┬───────┘  └───────────────┘  │
-└──────────────────────────┼──────────────────────────────┘
-                           │
-        ┌──────────────────┼──────────────────┐
-   WS client          Unix Socket          WS client
-  (浏览器)            (rcc/rcc-tui)         (其他端)
+│               proxy.js（长期常驻进程）                   │
+│  - 对外 HTTP/WS 服务（:8310）                           │
+│  - Token 认证                                           │
+│  - WS + PTY 管理（pty-manager）                         │
+│  - 热重载：SIGUSR2 → 重启 app.js，不断 WS/PTY           │
+└──────────────────────┬──────────────────────────────────┘
+                       │ Unix Socket (/tmp/rcc-app.sock)
+┌──────────────────────▼──────────────────────────────────┐
+│               app.js（可热重启的业务层）                  │
+│  - REST API（projects/sessions/fs/upload）              │
+│  - 文件浏览器 API（/api/fs/*）                          │
+└─────────────────────────────────────────────────────────┘
 ```
+
+**热重载设计**：proxy.js 常驻，负责 WS 连接和 PTY 进程；app.js 处理业务逻辑，修改后可通过 `rcc-server reload` 无中断热重启。
 
 ### 核心模块
 
+#### `server/proxy.js`
+
+长期常驻进程，职责：
+- 监听 HTTP/WS 端口，管理 token（Bearer Auth + local.token）
+- WebSocket 连接全生命周期（含 PTY 消息路由）
+- 普通 HTTP 请求通过 Unix Socket 转发给 app.js
+- `/api/active-sessions`、`/api/session-log` 在 proxy 侧直接响应（依赖 pty-manager 内存状态）
+- 监听 SIGUSR2 触发热重载（debounce 防多次触发）
+
+#### `server/app.js`
+
+可热重启的业务层，监听 Unix Socket，通过 mock req/res 处理 Express 路由：
+- 所有 REST API（projects、sessions、upload、fs）
+- SPA 静态文件服务 + SPA fallback
+
 #### `server/pty-manager.js`
 
-PTY 会话生命周期管理。
-
-**数据结构**：
+PTY 会话池，由 proxy.js 加载，生命周期与 proxy 绑定：
 
 ```js
 sessions: Map<sessionId, {
-  name, workingDir, resumeSessionId,
   ptyProcess,           // node-pty 实例
   clients: Set<Client>, // WS + Unix Socket 订阅者
   buffer,               // 500KB in-memory scrollback
   logPath, logStream,   // 磁盘日志（最多 9000 行）
   socketPath, socketServer,
-  exitCode, createdAt, lastActiveAt
 }>
 ```
 
 **关键机制**：
-- **全局去重**：同 `workingDir + resumeSessionId` 已有活跃会话 → 直接 attach，不重复创建
-- **多路广播**：PTY 输出同时发给所有 clients（WS + Unix Socket）
-- **Log rotate**：每 64KB 检查一次，超过 9000 行截断
-- **自动清理**：PTY 退出后 5 秒自动删除并广播更新
-- **单实例锁**：`~/.rcc/server.lock`，同机器只允许一个 rcc 服务运行
+- 同 `workingDir + resumeSessionId` 已有活跃会话 → 直接 attach，不重复创建
+- PTY 输出广播给所有 clients（WS + Unix Socket）
+- 会话退出 5s 后自动清理并广播列表更新
+
+#### `server/fs-handler.js`
+
+文件浏览 API 实现：
+- 安全白名单：`~`、`/tmp`、`/paddle`（可通过 `FS_ROOTS` 环境变量扩展）
+- `path.resolve()` 防路径遍历
+- 文本预览 100KB 限制，图片预览 2MB 限制
 
 #### `server/auth.js`
 
 - Bearer Token 认证，有效期 30 天
-- 服务启动时生成 `~/.rcc/local.token`（权限 600），供 `rcc-tui` 免密本地认证
-- 进程退出时自动删除 local.token
+- 启动时生成 `local.token`（写入由 proxy.js 在端口监听成功后执行，防 watchdog 重试时覆盖）
+- `rcc-server stop` 清理 local.token
+
+#### `client/src/components/FileBrowser.vue`
+
+文件浏览器组件，双栏布局（文件列表 + 预览）：
+- 默认显示当前会话工作目录，切换会话自动跟随
+- 支持文本/代码预览（含行号）、图片预览
+- 「复制路径」操作，预览面板顶部也有复制按钮
 
 #### `client/src/App.vue`
 
-- 每个会话独立 WS 连接（避免组件重建导致重复创建会话）
-- 控制 WS：专门接收 `session_list` 广播，不承载 PTY 数据
-- `termRefs`：直接调用 Terminal 组件的 `write()`/`fit()`/`scrollToBottom()`
-
-#### `client/src/components/Terminal.vue`
-
-纯渲染组件，无 WS 逻辑：
-- `term.onData` → `emit('input')` → App → WS → PTY
-- `trackInput(data)`：追踪当前行内容，驱动 SymbolBar CC/SH 模式切换
-- `expose: { write, fit, scrollToBottom, trackInput }`
+- 每个会话独立 WS 连接（不共用，防组件重建导致重复创建）
+- 控制 WS：专门接收 `session_list` 广播
+- `sendToActiveTerminal(text)`：文件浏览器 → 当前活跃终端
 
 ### 数据流
 
 ```
 用户键盘输入
-  → xterm onData → emit('input') → App.onTermInput
-  → entry.ws.send(data) → PTY stdin
+  → xterm onData → emit('input') → App → WS → proxy → PTY stdin
 
 PTY 输出
-  → pty.onData(data) → session.buffer
-  → logStream.write(data)
-  → broadcastData → ws.send(data) → termRefs[sid].write(data)
-                  → socket.write(data) → 本地终端
+  → pty.onData → session.buffer + logStream
+  → broadcastData → ws.send → xterm.write（浏览器）
+                 → socket.write（rcc-tui）
 ```
 
 ---
@@ -99,79 +116,71 @@ PTY 输出
 │                     Client (Browser)                     │
 │  Vue 3 + xterm.js + WebSocket                           │
 └──────────────────────┬──────────────────────────────────┘
-                       │ WebSocket (ws/wss)
+                       │ HTTP / WebSocket
 ┌──────────────────────▼──────────────────────────────────┐
-│                  Server (Node.js)                        │
-│  Express + ws + node-pty                                │
-│  ┌─────────────┐  ┌──────────────┐  ┌───────────────┐  │
-│  │  auth.js    │  │ pty-manager  │  │  history.js   │  │
-│  │ Token auth  │  │  PTY pool    │  │  History read │  │
-│  └─────────────┘  └──────┬───────┘  └───────────────┘  │
-└──────────────────────────┼──────────────────────────────┘
-                           │
-        ┌──────────────────┼──────────────────┐
-   WS client          Unix Socket          WS client
-  (browser)          (rcc/rcc-tui)         (others)
+│               proxy.js (long-running process)            │
+│  - HTTP/WS server (:8310)                               │
+│  - Token auth                                           │
+│  - WS + PTY management (pty-manager)                    │
+│  - Hot reload: SIGUSR2 → restart app.js, no WS/PTY drop │
+└──────────────────────┬──────────────────────────────────┘
+                       │ Unix Socket (/tmp/rcc-app.sock)
+┌──────────────────────▼──────────────────────────────────┐
+│               app.js (hot-reloadable business layer)     │
+│  - REST API (projects/sessions/fs/upload)               │
+│  - File browser API (/api/fs/*)                         │
+└─────────────────────────────────────────────────────────┘
 ```
+
+**Hot reload design**: proxy.js stays alive, owning WS connections and PTY processes. app.js handles business logic and can be restarted without interruption via `rcc-server reload`.
 
 ### Core Modules
 
+#### `server/proxy.js`
+
+Long-running process:
+- HTTP/WS server, token management (Bearer Auth + local.token)
+- Full WS lifecycle (PTY message routing)
+- Forwards HTTP requests to app.js via Unix Socket
+- `/api/active-sessions` and `/api/session-log` handled directly (depend on in-memory pty-manager state)
+- Listens for SIGUSR2 to trigger hot reload (debounced)
+
+#### `server/app.js`
+
+Hot-reloadable business layer, listens on Unix Socket, handles Express routes via mock req/res:
+- All REST APIs (projects, sessions, upload, fs)
+- Static file serving + SPA fallback
+
 #### `server/pty-manager.js`
 
-PTY session lifecycle management.
+PTY session pool, loaded by proxy.js, lifecycle tied to proxy:
+- Same `workingDir + resumeSessionId` with active session → attach directly
+- PTY output broadcast to all clients (WS + Unix Socket)
+- Session auto-removed 5s after PTY exits
 
-**Data structure**:
+#### `server/fs-handler.js`
 
-```js
-sessions: Map<sessionId, {
-  name, workingDir, resumeSessionId,
-  ptyProcess,           // node-pty instance
-  clients: Set<Client>, // WS + Unix Socket subscribers
-  buffer,               // 500KB in-memory scrollback
-  logPath, logStream,   // disk log (max 9000 lines)
-  socketPath, socketServer,
-  exitCode, createdAt, lastActiveAt
-}>
-```
-
-**Key mechanisms**:
-- **Global dedup**: same `workingDir + resumeSessionId` with an active session → attach directly, no new process
-- **Broadcast**: PTY output sent to all clients simultaneously (WS + Unix Socket)
-- **Log rotate**: checked every 64KB, trimmed to last 9000 lines when exceeded
-- **Auto-cleanup**: session deleted 5 seconds after PTY exits, list broadcast updated
-- **Single-instance lock**: `~/.rcc/server.lock`, only one rcc service per machine
+File browser API:
+- Whitelist roots: `~`, `/tmp`, `/paddle` (extendable via `FS_ROOTS`)
+- `path.resolve()` prevents traversal attacks
+- Text preview 100KB limit, image preview 2MB limit
 
 #### `server/auth.js`
 
-- Bearer Token auth, 30-day TTL
-- On start, writes `~/.rcc/local.token` (chmod 600) for password-free local auth by `rcc-tui`
-- local.token deleted on process exit
-
-#### `client/src/App.vue`
-
-- Each session has its own dedicated WS connection (prevents duplicate session creation from component re-mount)
-- Control WS: receives `session_list` broadcasts only, carries no PTY data
-- `termRefs`: calls Terminal component methods directly (`write()`/`fit()`/`scrollToBottom()`)
-
-#### `client/src/components/Terminal.vue`
-
-Pure render component, no WS logic:
-- `term.onData` → `emit('input')` → App → WS → PTY
-- `trackInput(data)`: tracks current line content, drives CC/SH mode switch in SymbolBar
-- `expose: { write, fit, scrollToBottom, trackInput }`
+- Bearer Token, 30-day TTL
+- `local.token` written only after `server.listen()` succeeds (prevents watchdog retries from overwriting)
+- Cleaned up by `rcc-server stop`
 
 ### Data Flow
 
 ```
 User keyboard input
-  → xterm onData → emit('input') → App.onTermInput
-  → entry.ws.send(data) → PTY stdin
+  → xterm onData → emit('input') → App → WS → proxy → PTY stdin
 
 PTY output
-  → pty.onData(data) → session.buffer
-  → logStream.write(data)
-  → broadcastData → ws.send(data) → termRefs[sid].write(data)
-                  → socket.write(data) → local terminal
+  → pty.onData → session.buffer + logStream
+  → broadcastData → ws.send → xterm.write (browser)
+                 → socket.write (rcc-tui)
 ```
 
 ---

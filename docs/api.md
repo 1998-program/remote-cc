@@ -77,6 +77,32 @@ GET /docs                  # 文档列表
 GET /docs/:name            # 读取指定文档（如 usage.md）
 ```
 
+#### 文件系统（需认证）
+
+```
+GET /api/fs/list?path=~&hidden=false
+```
+
+响应：`{ path, entries: [{ name, type, size, mtime, ext }] }`
+
+- `type`：`"dir"` | `"file"`
+- 白名单路径：`~`、`/tmp`、`/paddle`（可通过 `FS_ROOTS` 扩展）
+
+```
+GET /api/fs/read?path=/path/to/file&maxBytes=102400
+```
+
+响应：
+- 文本：`{ path, type: "text", content, truncated, size }`
+- 图片：`{ path, type: "image", dataUrl, size }`（base64 data URL）
+- 超限/不支持：`{ path, type: "image_too_large"|"unsupported", size }`
+
+```
+GET /api/fs/stat?path=/path/to/file
+```
+
+响应：`{ path, name, type, size, mtime, mode }`
+
 ---
 
 ### WebSocket API
@@ -198,6 +224,32 @@ GET /api/sessions/:projectId
 GET /docs                  # List docs
 GET /docs/:name            # Read a doc (e.g. usage.md)
 ```
+
+#### File System (auth required)
+
+```
+GET /api/fs/list?path=~&hidden=false
+```
+
+Response: `{ path, entries: [{ name, type, size, mtime, ext }] }`
+
+- `type`: `"dir"` | `"file"`
+- Whitelist roots: `~`, `/tmp`, `/paddle` (extendable via `FS_ROOTS`)
+
+```
+GET /api/fs/read?path=/path/to/file&maxBytes=102400
+```
+
+Response:
+- Text: `{ path, type: "text", content, truncated, size }`
+- Image: `{ path, type: "image", dataUrl, size }` (base64 data URL)
+- Too large / unsupported: `{ path, type: "image_too_large"|"unsupported", size }`
+
+```
+GET /api/fs/stat?path=/path/to/file
+```
+
+Response: `{ path, name, type, size, mtime, mode }`
 
 ---
 
