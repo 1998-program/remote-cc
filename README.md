@@ -121,14 +121,17 @@ rcc-tui            # 本地交互式界面（推荐）
 ## 常用命令
 
 ```bash
+# 服务管理
 remotecc start          # 启动服务（守护进程，崩溃自动重启）
 remotecc stop           # 停止服务
 remotecc restart        # 完整重启（更新 server/ 后用）
 remotecc reload         # 热重载（仅更新前端/API，不断会话）
 remotecc update         # 拉取最新代码并自动重启/热重载
 remotecc status         # 查看服务状态
-rcc-tui                 # 交互式 TUI（无需登录，本地直连）
-remotecc attach <name>  # 通过 TUI 直接接入指定会话
+
+# 使用
+remotecc                # 进入 TUI 界面（推荐）
+remotecc attach <name>  # 直接在 TUI 内接入指定会话
 ```
 
 在任意会话内：**`Ctrl+]`** 断开回菜单，不终止 Claude 进程。
