@@ -264,7 +264,9 @@ function handleIPCRequest(reqObj, socket) {
         if (Buffer.isBuffer(data)) bodyChunks.push(data);
         else bodyChunks.push(Buffer.from(String(data)));
       }
-      sendIPCResponse(id, statusCode, respHeaders, Buffer.concat(bodyChunks), socket);
+      // 使用 mockRes.statusCode：Express 可能直接赋值 res.statusCode（如 304）
+      // 而不经过 writeHead/status 方法，闭包变量 statusCode 不会被更新
+      sendIPCResponse(id, mockRes.statusCode, respHeaders, Buffer.concat(bodyChunks), socket);
       return mockRes;
     },
     write(data) {

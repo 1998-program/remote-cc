@@ -597,7 +597,12 @@ async function tryRestore() {
     const lastId = localStorage.getItem('rcc_last_session');
     const alive = sessions.find(s => s.sessionId === lastId && s.alive);
     if (alive) openSession(alive);
-  } catch (_) {}
+  } catch (e) {
+    // 401 已由 apiFetch 触发 handleUnauthorized；其余网络错误也退出登录
+    if (e?.message !== 'Unauthorized') {
+      authed.value = false;
+    }
+  }
 }
 
 // ── Switcher click-outside ────────────────────────────────────────────────────
@@ -629,7 +634,9 @@ function init() {
       const s = sessions.find(x => x.sessionId === r.params.id && x.alive);
       if (s) openSession(s);
       else { navigate('home'); tryRestore(); }
-    }).catch(() => { navigate('home'); tryRestore(); });
+    }).catch(e => {
+      if (e?.message !== 'Unauthorized') authed.value = false;
+    });
   } else if (r.name === 'new-session') {
     view.value = 'new-session';
   } else if (r.name === 'settings') {
