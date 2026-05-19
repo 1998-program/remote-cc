@@ -6,7 +6,7 @@ const messages = {
   zh: {
     // 登录
     login_title:    '> remote',
-    login_sub:      'Remote Claude Code',
+    login_sub:      'RemoteCC',
     login_user:     '用户名',
     login_pass:     '密码',
     login_btn:      '登 录',
@@ -23,7 +23,7 @@ const messages = {
     new_btn:        '新建',
     loading:        '连接中...',
     no_conv_title:  '暂无对话',
-    no_conv_sub:    '新建一个 Claude Code 会话',
+    no_conv_sub:    '新建一个 Agent 会话',
     start_conv:     '开始对话',
     msgs:           '条消息',
     just_now:       '刚刚',
@@ -42,7 +42,7 @@ const messages = {
 
     // 新建对话
     new_title:      '新建对话',
-    new_sub:        '启动一个新的 Claude Code 会话',
+    new_sub:        '启动一个新的 Agent 会话',
     work_dir:       '工作目录',
     sess_name:      '会话名称',
     name_hint:      '留空自动生成',
@@ -106,7 +106,7 @@ const messages = {
 
   en: {
     login_title:    '> remote',
-    login_sub:      'Remote Claude Code',
+    login_sub:      'RemoteCC',
     login_user:     'Username',
     login_pass:     'Password',
     login_btn:      'LOGIN',
@@ -121,7 +121,7 @@ const messages = {
     new_btn:        'New',
     loading:        'Connecting...',
     no_conv_title:  'No conversations yet',
-    no_conv_sub:    'Start a new Claude Code session',
+    no_conv_sub:    'Start a new agent session',
     start_conv:     'Start conversation',
     msgs:           'msgs',
     just_now:       'just now',
@@ -138,7 +138,7 @@ const messages = {
     delete_btn:     'Delete',
 
     new_title:      'New Conversation',
-    new_sub:        'Starts a new Claude Code session',
+    new_sub:        'Starts a new agent session',
     work_dir:       'Working Directory',
     sess_name:      'Name',
     name_hint:      'auto if empty',

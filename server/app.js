@@ -70,9 +70,9 @@ app.post('/api/upload', (req, res) => {
   req.on('error', e => res.status(500).json({ error: e.message }));
 });
 
-app.get('/api/projects',            (req, res) => { try { res.json(getProjects()); }                      catch (e) { res.status(500).json({ error: e.message }); } });
-app.get('/api/sessions/:projectId', (req, res) => { try { res.json(getSessions(req.params.projectId)); }  catch (e) { res.status(500).json({ error: e.message }); } });
-app.get('/api/session/:sessionId',  (req, res) => { try { res.json(readSession(req.params.sessionId)); }  catch (e) { res.status(500).json({ error: e.message }); } });
+app.get('/api/projects',            (req, res) => { try { res.json(getProjects(req.query.agent)); }                      catch (e) { res.status(500).json({ error: e.message }); } });
+app.get('/api/sessions/:projectId', (req, res) => { try { res.json(getSessions(req.params.projectId, req.query.agent)); } catch (e) { res.status(500).json({ error: e.message }); } });
+app.get('/api/session/:sessionId',  (req, res) => { try { res.json(readSession(req.params.sessionId, req.query.agent)); } catch (e) { res.status(500).json({ error: e.message }); } });
 
 // /api/active-sessions 和 /api/session-log 由 proxy 直接处理（pty-manager 在 proxy 进程）
 // app.js 不处理这两个端点；proxy.js 会在转发前拦截它们

@@ -1,4 +1,4 @@
-# RemoteCC — Use Claude Code from Anywhere
+# RemoteCC — Use Claude Code / Codex from Anywhere
 
 [中文](README.md) | English
 
@@ -9,7 +9,7 @@
   ██╔══██╗██║     ██║
   ██║  ██║╚██████╗╚██████╗
   ╚═╝  ╚═╝ ╚═════╝ ╚═════╝
-  Remote Claude Code
+  RemoteCC
 ```
 
 > **This tool was built with the help of Claude Code, and is still actively being improved. Bug reports and suggestions are very welcome — please open an [Issue](https://github.com/changdazhou/remote-cc/issues).**
@@ -18,31 +18,31 @@
 
 ## What is this?
 
-**Access Claude Code from your phone, tablet, or any browser — all in real time.**
+**Access Claude Code and Codex from your phone, tablet, or any browser — all in real time.**
 
-Claude Code is a powerful AI coding assistant that runs in your terminal — but only locally. RemoteCC breaks that limitation. Your Claude Code session can be accessed simultaneously from a phone browser, a tablet, and a local terminal, with **all clients sharing the same PTY process in real time**.
+Claude Code and Codex are powerful AI coding assistants that run in your terminal — but only locally. RemoteCC breaks that limitation. Your agent session can be accessed simultaneously from a phone browser, a tablet, and a local terminal, with **all clients sharing the same PTY process in real time**.
 
-This is not screenshots or log forwarding. It is **true bidirectional real-time sync** — type on your phone and the desktop sees it instantly; run something in the terminal and your phone shows the output right away. Disconnect any client at any time, and Claude keeps working in the background. Reconnect whenever you want, seamlessly.
+This is not screenshots or log forwarding. It is **true bidirectional real-time sync** — type on your phone and the desktop sees it instantly; run something in the terminal and your phone shows the output right away. Disconnect any client at any time, and the agent keeps working in the background. Reconnect whenever you want, seamlessly.
 
 ---
 
 ## Key Features
 
 - **Real terminal** — full color, interactive, and mouse support, just like using it locally
-- **Real-time multi-client sync** — phone, tablet, and desktop all share the same Claude session
-- **Persistent sessions** — close the browser or drop SSH, Claude keeps running; reconnect anytime
-- **History resume** — reads `~/.claude/projects/`, resume any past conversation
+- **Real-time multi-client sync** — phone, tablet, and desktop all share the same agent session
+- **Persistent sessions** — close the browser or drop SSH, the agent keeps running; reconnect anytime
+- **History resume** — reads `~/.claude/projects/` or `~/.codex/history.jsonl`, resume any past conversation
 - **File browser** — browse server files in the web UI, preview code/images, copy paths
 - **Session manager** — run `remotecc` on the server to get a visual menu for managing sessions
-- **Detach shortcut** — `Ctrl+]` goes back to the menu without killing Claude
+- **Detach shortcut** — `Ctrl+]` goes back to the menu without killing the agent
 - **Mobile-optimized** — responsive UI, comfortable to use on a phone
 - **Rich themes** — 9 color themes + 3 UI styles
 
 ---
 
-## Upload Files / Images to Claude
+## Upload Files / Images to Agent
 
-The web terminal toolbar provides a **＋** button that supports three ways to pass files to Claude:
+The web terminal toolbar provides a **＋** button that supports three ways to pass files to Claude Code or Codex:
 
 | Method | How |
 |--------|-----|
@@ -50,7 +50,7 @@ The web terminal toolbar provides a **＋** button that supports three ways to p
 | Drag & drop | Drag files directly onto the terminal area |
 | Paste image | Screenshot then Ctrl+V (auto-uploads) |
 
-Files are stored to `~/.rcc/uploads/` on the server, and the path is automatically typed at the terminal cursor — just press Enter or continue your Claude command.
+Files are stored to `~/.rcc/uploads/` on the server, and the path is automatically typed at the terminal cursor — just press Enter or continue your agent command.
 
 ---
 
@@ -85,12 +85,12 @@ Supported preview types: `.md` `.txt` `.py` `.js` `.ts` `.json` `.sh` `.yaml` an
          PTY Manager  ◀───────────────────────┘
                │
                ▼
-        claude process (always running)
+        agent process (always running)
 ```
 
 **Any client input → PTY stdin → all clients see the output**
 
-This is not mirroring or proxying — multiple subscribers share the same PTY master fd. Even if you disconnect all clients, Claude keeps executing in the background.
+This is not mirroring or proxying — multiple subscribers share the same PTY master fd. Even if you disconnect all clients, the agent keeps executing in the background.
 
 ---
 
@@ -103,6 +103,10 @@ bash install.sh
 ```
 
 The install script is fully interactive and auto-detects your environment.
+
+RemoteCC auto-detects Claude Code and Codex; at least one of them must be installed. New sessions can choose the agent, and history resume supports both `~/.claude/projects/` and `~/.codex/history.jsonl`.
+
+If Codex or Claude Code needs a proxy, configure `CODEX_PROXY` / `CLAUDE_PROXY` in the installer. The proxy is injected only into the selected agent CLI, not into RemoteCC globally. The prompt uses `http://127.0.0.1:7890` as a generic example.
 
 After installation:
 
@@ -131,7 +135,7 @@ remotecc                # Open visual session manager
 remotecc attach <name>  # Jump directly into a named session
 ```
 
-Inside any session: **`Ctrl+]`** goes back to the menu without killing Claude.
+Inside any session: **`Ctrl+]`** goes back to the menu without killing the agent.
 
 ---
 
@@ -140,7 +144,7 @@ Inside any session: **`Ctrl+]`** goes back to the menu without killing Claude.
 ### 2026-05-12
 
 - **File browser**: browse server files, preview code/images, double-click for fullscreen, copy path
-- **Hot reload**: `remotecc reload` restarts only the API layer, active Claude sessions are not interrupted
+- **Hot reload**: `remotecc reload` restarts only the API layer, active agent sessions are not interrupted
 - **remotecc update**: detects what changed and automatically restarts or hot-reloads as needed
 - **remotecc attach**: opens the session manager and goes directly into the named session; detaching returns to the menu instead of exiting
 - **Login redirect**: when the service restarts and the token expires, the browser automatically shows the login page instead of a blank screen

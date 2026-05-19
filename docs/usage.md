@@ -11,13 +11,13 @@
 RemoteCC 的核心是**一个 PTY 进程，多个同步观察者**：
 
 ```
-Claude Code PTY（持续运行）
+Agent PTY（持续运行）
         ├──▶ 浏览器 WebSocket（手机/平板/PC）
         ├──▶ rcc-tui（本地交互式 TUI）
         └──▶ remotecc attach（进入 TUI 接入会话）
 ```
 
-无论从哪端输入，所有端实时可见。PTY 独立于客户端运行——关闭浏览器或断开 SSH，Claude 在后台继续工作。
+无论从哪端输入，所有端实时可见。PTY 独立于客户端运行——关闭浏览器或断开 SSH，Agent 在后台继续工作。
 
 ---
 
@@ -38,8 +38,9 @@ Claude Code PTY（持续运行）
 
 #### 新建对话
 
-- **New 标签**：输入工作目录和会话名 → 启动
-- **Resume 标签**：从 `~/.claude/projects/` 选历史对话 → 以 `--resume` 恢复
+- **New 标签**：选择 Claude Code 或 Codex，输入工作目录和会话名 → 启动
+- **Resume 标签**：从 `~/.claude/projects/` 或 `~/.codex/history.jsonl` 选历史对话 → 恢复
+- **代理**：安装时可配置 `CODEX_PROXY` / `CLAUDE_PROXY`；代理只用于 Agent CLI，不会作为 RemoteCC 全局代理。
 
 #### 终端操作
 
@@ -97,7 +98,7 @@ remotecc log <name>        # 实时查看会话日志（tail -f）
 rcc-tui
 ```
 
-启动后显示大字 banner 和会话列表：
+启动后显示大字 banner 和会话列表。`rcc-tui` 会读取 `~/.rcc/server.lock` 和项目 `.env` 来判断服务端口；如果端口被其他进程占用，`rcc-server status` 会显示占用者：
 
 ```
   ██████╗  ██████╗ ██████╗
@@ -142,13 +143,13 @@ rcc-tui
 RemoteCC's core is **one PTY process, multiple synchronized observers**:
 
 ```
-Claude Code PTY (always running)
+Agent PTY (always running)
         ├──▶ Browser WebSocket (phone/tablet/PC)
         ├──▶ rcc-tui (local interactive TUI)
         └──▶ remotecc attach (enter TUI to attach session)
 ```
 
-Input from any client is visible to all others in real time. The PTY runs independently — closing the browser or dropping SSH does not interrupt Claude.
+Input from any client is visible to all others in real time. The PTY runs independently — closing the browser or dropping SSH does not interrupt the agent.
 
 ---
 
@@ -169,8 +170,9 @@ Open `http://<server>:8310` in a browser and log in.
 
 #### New Conversation
 
-- **New tab**: Enter working directory and session name → start
-- **Resume tab**: Browse `~/.claude/projects/` history → resume with `--resume`
+- **New tab**: Choose Claude Code or Codex, enter working directory and session name → start
+- **Resume tab**: Browse `~/.claude/projects/` or `~/.codex/history.jsonl` history → resume
+- **Proxy**: Configure `CODEX_PROXY` / `CLAUDE_PROXY` during installation; proxy variables are scoped to the agent CLI and are not global RemoteCC proxy settings.
 
 #### Terminal Shortcuts
 
@@ -228,7 +230,7 @@ Local interactive TUI — no login required, connects directly via Unix Socket:
 rcc-tui
 ```
 
-Displays a large-text banner and session list on launch:
+Displays a large-text banner and session list on launch. `rcc-tui` reads `~/.rcc/server.lock` and the project `.env` to detect the service port; if another process occupies the port, `rcc-server status` shows the owner:
 
 ```
   ██████╗  ██████╗ ██████╗
@@ -272,7 +274,7 @@ Displays a large-text banner and session list on launch:
 
 **文件浏览器**：Web 界面新增文件浏览功能。顶栏点击 ⊞ 打开，支持目录导航、文本/图片预览、复制路径、一键 cd 到终端。
 
-**热重载架构**：服务拆分为 proxy.js（常驻）和 app.js（可热重启）。执行 `rcc-server reload` 仅重启业务层，WS 连接和 Claude 会话不中断。
+**热重载架构**：服务拆分为 proxy.js（常驻）和 app.js（可热重启）。执行 `rcc-server reload` 仅重启业务层，WS 连接和 Agent 会话不中断。
 
 **rcc-server 命令**：
 

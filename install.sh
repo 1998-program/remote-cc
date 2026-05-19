@@ -55,7 +55,7 @@ print_banner() {
   echo "  ██║  ██║╚██████╗╚██████╗ "
   echo "  ╚═╝  ╚═╝ ╚═════╝ ╚═════╝ "
   echo -e "${R}"
-  echo -e "  ${B}Remote Claude Code${R}  ${GRAY}— 多端协同终端工具${R}"
+  echo -e "  ${B}RemoteCC${R}  ${GRAY}— 多端协同终端工具${R}"
   echo -e "  ${D}${HR}${R}"
   echo ""
 }
@@ -81,11 +81,25 @@ input() {
   echo "${val:-$def}"
 }
 
+proxy_input() {
+  local current="${1:-}" msg="$2" val
+  ask "$msg: "
+  read -r val < /dev/tty
+  echo "${val:-$current}"
+}
+
 # ═══════════════════════════════════════════════════════════════════════════════
 [[ "$NON_INTERACTIVE" == "0" ]] && print_banner
 echo -e "  欢迎使用 ${B}RemoteCC${R} 一键部署向导\n"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+if [[ -f "$SCRIPT_DIR/.env" ]]; then
+  set -a
+  # shellcheck disable=SC1090
+  source <(grep -E '^[A-Z_]+=.*' "$SCRIPT_DIR/.env")
+  set +a
+fi
 
 # ── Step 1: 检查环境 ──────────────────────────────────────────────────────────
 step "检查运行环境"
@@ -108,10 +122,11 @@ else
   info "未检测到 g++（使用预编译 node-pty，无需编译）"
 fi
 
-# ── Step 2: 自动检测 Claude Code ─────────────────────────────────────────────
-step "检测 Claude Code"
+# ── Step 2: 自动检测 Agent CLI ────────────────────────────────────────────────
+step "检测 Agent CLI"
 
 CLAUDE_BIN=""
+CODEX_BIN=""
 
 # 自动检测候选路径
 NVM_NODE_DIRS=()
@@ -136,8 +151,24 @@ for c in "${CANDIDATES[@]}"; do
   fi
 done
 
-if [[ -z "$CLAUDE_BIN" ]]; then
-  err "未找到 Claude Code。请先安装：npm install -g @anthropic-ai/claude-code"
+CODEX_CANDIDATES=(
+  "$(command -v codex 2>/dev/null || true)"
+)
+for v in "${NVM_NODE_DIRS[@]}"; do
+  CODEX_CANDIDATES+=("$HOME/.nvm/versions/node/$v/bin/codex")
+done
+
+for c in "${CODEX_CANDIDATES[@]}"; do
+  if [[ -n "$c" && -x "$c" ]]; then
+    CODEX_BIN="$c"
+    CODEX_VER=$("$CODEX_BIN" --version 2>/dev/null | head -1 || echo "unknown")
+    ok "Codex: $CODEX_BIN ($CODEX_VER)"
+    break
+  fi
+done
+
+if [[ -z "$CLAUDE_BIN" && -z "$CODEX_BIN" ]]; then
+  err "未找到 Claude Code 或 Codex。请先安装其中一个：npm install -g @anthropic-ai/claude-code 或 npm install -g @openai/codex"
 fi
 
 # ── Step 3: IS_SANDBOX 自动检测 ──────────────────────────────────────────────
@@ -156,16 +187,16 @@ step "配置服务参数"
 
 if [[ "$NON_INTERACTIVE" == "1" ]]; then
   # 非交互模式：直接用参数，校验必要字段
-  RC_USER="${_USER:-admin}"
-  RC_PASS="${_PASS}"
-  PORT="${_PORT:-8310}"
+  RC_USER="${_USER:-${RC_USER:-admin}}"
+  RC_PASS="${_PASS:-${RC_PASS:-}}"
+  PORT="${_PORT:-${PORT:-8310}}"
   [[ -z "$RC_PASS" ]] && err "非交互模式必须提供密码: -p <password>"
   [[ "$PORT" =~ ^[0-9]+$ && "$PORT" -ge 1024 && "$PORT" -le 65535 ]] || err "端口号无效: $PORT"
   ok "用户名: $RC_USER  端口: $PORT"
 else
   echo -e "  ${GRAY}配置 Web 界面的登录账号和监听端口，安装完成后用此账号登录浏览器界面。${R}\n"
 
-  RC_USER=$(input "${_USER:-admin}" "管理员用户名（Web 登录用）")
+  RC_USER=$(input "${_USER:-${RC_USER:-admin}}" "管理员用户名（Web 登录用）")
 
   while true; do
     echo -n "  管理员密码（Web 登录用，输入不显示）: " > /dev/tty; read -rs RC_PASS < /dev/tty; echo "" > /dev/tty
@@ -176,21 +207,40 @@ else
     break
   done
 
-  PORT=$(input "${_PORT:-8310}" "监听端口（浏览器访问 http://<IP>:<端口>）")
+  PORT=$(input "${_PORT:-${PORT:-8310}}" "监听端口（浏览器访问 http://<IP>:<端口>）")
   [[ "$PORT" =~ ^[0-9]+$ && "$PORT" -ge 1024 && "$PORT" -le 65535 ]] || err "端口号无效: $PORT"
 
   echo ""
   ok "配置完成：用户名 ${RC_USER}，端口 ${PORT}"
 fi
 
-# ── Step 5: 更新 Claude 路径到 pty-manager ───────────────────────────────────
+# ── Step 5: Agent 代理配置 ───────────────────────────────────────────────────
+step "配置 Agent 代理"
+
+CLAUDE_PROXY="${CLAUDE_PROXY:-}"
+CODEX_PROXY="${CODEX_PROXY:-}"
+AGENT_NO_PROXY="${AGENT_NO_PROXY:-localhost,127.0.0.1,::1}"
+
+if [[ "$NON_INTERACTIVE" == "1" ]]; then
+  info "非交互模式：沿用环境变量或现有 .env 中的 CLAUDE_PROXY / CODEX_PROXY"
+else
+  echo -e "  ${GRAY}代理只会注入 Claude/Codex CLI 启动环境，不会写入 RemoteCC 服务全局代理。留空表示不使用代理。${R}\n"
+  CODEX_PROXY=$(proxy_input "$CODEX_PROXY" "Codex 代理 URL（示例 http://127.0.0.1:7890，留空保持现有配置）")
+  CLAUDE_PROXY=$(proxy_input "$CLAUDE_PROXY" "Claude Code 代理 URL（示例 http://127.0.0.1:7890，留空保持现有配置）")
+  if [[ -n "$CODEX_PROXY" || -n "$CLAUDE_PROXY" ]]; then
+    AGENT_NO_PROXY=$(input "$AGENT_NO_PROXY" "NO_PROXY（Agent CLI 使用）")
+  fi
+fi
+
+[[ -n "$CODEX_PROXY" ]] && ok "Codex 代理已配置"
+[[ -n "$CLAUDE_PROXY" ]] && ok "Claude Code 代理已配置"
+[[ -z "$CODEX_PROXY" && -z "$CLAUDE_PROXY" ]] && info "未配置 Agent 代理"
+
+# ── Step 6: 写入 Agent 路径配置 ───────────────────────────────────────────────
 step "写入配置"
 
-PTY_FILE="$SCRIPT_DIR/server/pty-manager.js"
-if [[ -f "$PTY_FILE" ]]; then
-  sed -i "s|return '/root/.nvm/versions/node/v[^']*'|return '$CLAUDE_BIN'|g" "$PTY_FILE" 2>/dev/null || true
-  ok "Claude 路径已写入 pty-manager.js"
-fi
+DEFAULT_AGENT="claude"
+[[ -z "$CLAUDE_BIN" && -n "$CODEX_BIN" ]] && DEFAULT_AGENT="codex"
 
 ENV_FILE="$SCRIPT_DIR/.env"
 cat > "$ENV_FILE" << EOF
@@ -198,13 +248,18 @@ cat > "$ENV_FILE" << EOF
 RC_USER=${RC_USER}
 RC_PASS=${RC_PASS}
 PORT=${PORT}
+RCC_AGENT=${DEFAULT_AGENT}
 CLAUDE_BIN=${CLAUDE_BIN}
+CODEX_BIN=${CODEX_BIN}
+CLAUDE_PROXY=${CLAUDE_PROXY}
+CODEX_PROXY=${CODEX_PROXY}
+AGENT_NO_PROXY=${AGENT_NO_PROXY}
 ${IS_SANDBOX_FLAG:+IS_SANDBOX=1}
 EOF
 chmod 600 "$ENV_FILE"
 ok ".env 已生成（权限 600）"
 
-# ── Step 6: 安装依赖 ──────────────────────────────────────────────────────────
+# ── Step 7: 安装依赖 ──────────────────────────────────────────────────────────
 step "安装依赖"
 
 echo -e "  ${GRAY}安装服务端依赖（含 node-pty 原生编译）...${R}"
@@ -248,13 +303,13 @@ echo -e "  ${GRAY}安装前端依赖...${R}"
 (cd "$SCRIPT_DIR/client" && npm install --loglevel=warn 2>&1 | tail -2)
 ok "前端依赖完成"
 
-# ── Step 7: 构建前端 ──────────────────────────────────────────────────────────
+# ── Step 8: 构建前端 ──────────────────────────────────────────────────────────
 step "构建前端"
 
 (cd "$SCRIPT_DIR/client" && npm run build 2>&1 | tail -3)
 ok "前端已构建 → client/dist/"
 
-# ── Step 8: 安装命令行工具 ────────────────────────────────────────────────────
+# ── Step 9: 安装命令行工具 ────────────────────────────────────────────────────
 step "安装命令行工具"
 
 BIN_DIR="/usr/local/bin"
@@ -273,7 +328,7 @@ done
 sed -i "s|RCC_DIR=\"/paddle/project/local_tools/remote_cc\"|RCC_DIR=\"$SCRIPT_DIR\"|g" \
   "$SCRIPT_DIR/rcc-server" 2>/dev/null || true
 
-# ── Step 9: 启动服务 ──────────────────────────────────────────────────────────
+# ── Step 10: 启动服务 ─────────────────────────────────────────────────────────
 step "启动服务"
 
 if [[ "$NON_INTERACTIVE" == "1" && "$_YES" == "1" ]] || confirm "y" "现在启动 RemoteCC 服务?"; then

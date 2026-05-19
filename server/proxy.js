@@ -321,19 +321,28 @@ setInterval(() => {
   catch (_) { writeLocalToken(); }
 }, 5000).unref();
 
+server.on('error', err => {
+  if (err && err.code === 'EADDRINUSE') {
+    console.error(`[proxy] port ${PORT} is already in use. Stop the process using it or change PORT.`);
+  } else {
+    console.error('[proxy] server error:', err && err.message ? err.message : err);
+  }
+  shutdown(1);
+});
+
 server.listen(PORT, () => {
   // 确认端口监听成功后才写入 local.token，避免 watchdog 重试的失败进程覆盖 token
   writeLocalToken();
-  console.log(`Remote Claude Code  http://0.0.0.0:${PORT}  [proxy]`);
+  console.log(`RemoteCC  http://0.0.0.0:${PORT}  [proxy]`);
   console.log(`Auth: RC_USER=${process.env.RC_USER || 'admin'}`);
 });
 
 // ── 退出清理 ──────────────────────────────────────────────────────────────────
 
-function shutdown() {
+function shutdown(code = 0) {
   removeLock();
   try { if (appProcess) appProcess.kill('SIGTERM'); } catch (_) {}
-  process.exit(0);
+  process.exit(code);
 }
 
 // exit 事件一定执行（包括 pty-manager 的 SIGTERM handler 调用 process.exit 的情况）

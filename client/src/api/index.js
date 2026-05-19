@@ -54,9 +54,9 @@ async function apiFetchText(path) {
 }
 
 export const api = {
-  getProjects:        ()           => apiFetch('/api/projects'),
-  getSessions:        (projectId)  => apiFetch(`/api/sessions/${encodeURIComponent(projectId)}`),
-  getSession:         (sessionId)  => apiFetch(`/api/session/${encodeURIComponent(sessionId)}`),
+  getProjects:        (agent = 'claude') => apiFetch(`/api/projects?agent=${encodeURIComponent(agent)}`),
+  getSessions:        (projectId, agent = 'claude') => apiFetch(`/api/sessions/${encodeURIComponent(projectId)}?agent=${encodeURIComponent(agent)}`),
+  getSession:         (sessionId, agent = 'claude') => apiFetch(`/api/session/${encodeURIComponent(sessionId)}?agent=${encodeURIComponent(agent)}`),
   getActiveSessions:  ()           => apiFetch('/api/active-sessions'),
   getSessionLog:      (sessionId, bytes = 50000) => apiFetchText(`/api/session-log/${encodeURIComponent(sessionId)}?bytes=${bytes}`),
   fs: {

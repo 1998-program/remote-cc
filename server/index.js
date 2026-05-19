@@ -104,9 +104,9 @@ app.post('/api/upload', (req, res) => {
   req.on('error', e => res.status(500).json({ error: e.message }));
 });
 
-app.get('/api/projects',               (req, res) => { try { res.json(getProjects()); }                      catch (e) { res.status(500).json({ error: e.message }); } });
-app.get('/api/sessions/:projectId',    (req, res) => { try { res.json(getSessions(req.params.projectId)); }  catch (e) { res.status(500).json({ error: e.message }); } });
-app.get('/api/session/:sessionId',     (req, res) => { try { res.json(readSession(req.params.sessionId)); }  catch (e) { res.status(500).json({ error: e.message }); } });
+app.get('/api/projects',               (req, res) => { try { res.json(getProjects(req.query.agent)); }                     catch (e) { res.status(500).json({ error: e.message }); } });
+app.get('/api/sessions/:projectId',    (req, res) => { try { res.json(getSessions(req.params.projectId, req.query.agent)); } catch (e) { res.status(500).json({ error: e.message }); } });
+app.get('/api/session/:sessionId',     (req, res) => { try { res.json(readSession(req.params.sessionId, req.query.agent)); } catch (e) { res.status(500).json({ error: e.message }); } });
 app.get('/api/active-sessions',        (req, res) => res.json(listSessions()));
 app.get('/api/session-log/:sessionId', (req, res) => {
   const log = readLog(req.params.sessionId);
@@ -171,6 +171,6 @@ wss.on('connection', (ws) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`Remote Claude Code  http://0.0.0.0:${PORT}`);
+  console.log(`RemoteCC  http://0.0.0.0:${PORT}`);
   console.log(`Auth: RC_USER=${process.env.RC_USER || 'admin'}`);
 });

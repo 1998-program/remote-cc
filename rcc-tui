@@ -15,17 +15,30 @@ const path     = require('path');
 const os       = require('os');
 const crypto   = require('crypto');
 const readline = require('readline');
-const { spawn } = require('child_process');
+const { spawn, execFileSync } = require('child_process');
 
 // ── 路径 ──────────────────────────────────────────────────────────────────────
 const IS_WIN      = process.platform === 'win32';
 const HOME        = os.homedir();
+const APP_DIR     = (() => {
+  try { return path.dirname(fs.realpathSync(process.argv[1] || __filename)); } catch (_) { return __dirname; }
+})();
+const SERVER_DIR  = path.join(APP_DIR, 'server');
 const RCC_DIR     = path.join(HOME, '.rcc');
 const META_FILE   = path.join(RCC_DIR, 'sessions.json');
 const LOCK_FILE   = path.join(RCC_DIR, 'server.lock');
+const ENV_FILE    = path.join(APP_DIR, '.env');
 const SOCK_DIR    = path.join(RCC_DIR, 'sockets');
 const LOCAL_TOKEN = path.join(RCC_DIR, 'local.token');
 const CLAUDE_DIR  = path.join(HOME, '.claude', 'projects');
+const CODEX_HISTORY_FILE = path.join(HOME, '.codex', 'history.jsonl');
+
+const AGENTS = {
+  claude: { id: 'claude', name: 'Claude Code', history: '~/.claude/projects/' },
+  codex:  { id: 'codex',  name: 'Codex',       history: '~/.codex/history.jsonl' },
+};
+function normalizeAgent(agent) { return AGENTS[agent] ? agent : 'claude'; }
+function agentName(agent) { return AGENTS[normalizeAgent(agent)].name; }
 
 // ── ANSI ──────────────────────────────────────────────────────────────────────
 const A = {
@@ -61,15 +74,51 @@ function cwd(p) {
 }
 
 // ── 服务信息 ──────────────────────────────────────────────────────────────────
+function readEnvFile() {
+  const env = {};
+  try {
+    for (const line of fs.readFileSync(ENV_FILE, 'utf8').split(/\r?\n/)) {
+      const m = line.match(/^([A-Z_][A-Z0-9_]*)=(.*)$/);
+      if (m) env[m[1]] = m[2];
+    }
+  } catch (_) {}
+  return env;
+}
+
 function serverInfo() {
-  try { return JSON.parse(fs.readFileSync(LOCK_FILE, 'utf8')); } catch (_) { return null; }
+  try { return JSON.parse(fs.readFileSync(LOCK_FILE, 'utf8')); } catch (_) {}
+  const env = readEnvFile();
+  const port = parseInt(process.env.PORT || env.PORT || '8310', 10);
+  return Number.isFinite(port) ? { pid: null, port, fallback: true } : null;
 }
 function serverAlive(info) {
   if (!info) return false;
+  if (!info.pid) return !!localToken() && proxyOwnsPort(info.port);
   try { process.kill(info.pid, 0); return true; } catch (_) { return false; }
 }
 function localToken() {
   try { return fs.readFileSync(LOCAL_TOKEN, 'utf8').trim(); } catch (_) { return ''; }
+}
+
+function proxyOwnsPort(port) {
+  try {
+    const out = execFileSync('netstat', ['-ltnp'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+    const rows = out.split(/\r?\n/).filter(line => line.includes(`:${port} `) || line.includes(`:${port}\t`));
+    if (!rows.length) return false;
+    return rows.some(line => {
+      const pid = line.trim().split(/\s+/).pop()?.split('/')[0];
+      if (!pid || !/^\d+$/.test(pid)) return false;
+      try {
+        const args = execFileSync('ps', ['-p', pid, '-o', 'args='], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+        return args.includes(path.join(SERVER_DIR, 'proxy.js'));
+      } catch (_) {
+        return false;
+      }
+    });
+  } catch (_) {
+    // Some systems do not expose process names through netstat; keep old local-token fallback there.
+    return true;
+  }
 }
 
 // ── 本地 Meta ─────────────────────────────────────────────────────────────────
@@ -81,8 +130,12 @@ function sockPath(sid) {
 }
 function sockAlive(sid) { return IS_WIN || fs.existsSync(sockPath(sid)); }
 
-// ── Claude 历史（本地读取） ───────────────────────────────────────────────────
-function loadProjects() {
+// ── Agent 历史（本地读取） ────────────────────────────────────────────────────
+function loadProjects(agent = 'claude') {
+  return normalizeAgent(agent) === 'codex' ? loadCodexProjects() : loadClaudeProjects();
+}
+
+function loadClaudeProjects() {
   if (!fs.existsSync(CLAUDE_DIR)) return [];
   const dirs = fs.readdirSync(CLAUDE_DIR, { withFileTypes: true })
     .filter(d => d.isDirectory()).map(d => d.name);
@@ -94,6 +147,37 @@ function loadProjects() {
   }
   return result.sort((a, b) =>
     new Date(b.sessions[0].lastModified) - new Date(a.sessions[0].lastModified));
+}
+
+function loadCodexProjects() {
+  const sessions = loadCodexSessions();
+  if (!sessions.length) return [];
+  return [{ id: 'codex', displayPath: CODEX_HISTORY_FILE, sessions }];
+}
+
+function loadCodexSessions() {
+  if (!fs.existsSync(CODEX_HISTORY_FILE)) return [];
+  const byId = new Map();
+  try {
+    const lines = fs.readFileSync(CODEX_HISTORY_FILE, 'utf8').trim().split('\n').filter(Boolean);
+    for (const line of lines) {
+      let obj;
+      try { obj = JSON.parse(line); } catch (_) { continue; }
+      if (!obj?.session_id) continue;
+      const current = byId.get(obj.session_id) || {
+        sessionId: obj.session_id,
+        cwd: '',
+        lastMessage: '',
+        messageCount: 0,
+        lastModified: new Date(0).toISOString(),
+      };
+      current.messageCount += 1;
+      if (obj.text) current.lastMessage = String(obj.text).slice(0, 80);
+      if (obj.ts) current.lastModified = new Date(obj.ts * 1000).toISOString();
+      byId.set(obj.session_id, current);
+    }
+  } catch (_) {}
+  return Array.from(byId.values()).sort((a, b) => new Date(b.lastModified) - new Date(a.lastModified));
 }
 
 function loadClaudeSessions(projectId) {
@@ -175,7 +259,7 @@ function parseWsFrames(buf, onText) {
   }
 }
 
-function wsCreate(host, port, token, workingDir, name, resumeSessionId) {
+function wsCreate(host, port, token, workingDir, name, resumeSessionId, agent) {
   return new Promise((resolve, reject) => {
     const key = crypto.randomBytes(16).toString('base64');
     const sock = net.createConnection(port, host);
@@ -207,7 +291,7 @@ function wsCreate(host, port, token, workingDir, name, resumeSessionId) {
           const msg = JSON.parse(text);
           if (msg.type === 'session_list') {
             const payload = {
-              type: 'start', workingDir, name,
+              type: 'start', workingDir, name, agent: normalizeAgent(agent),
               cols: process.stdout.columns || 80,
               rows: process.stdout.rows    || 24,
               // 透传当前 shell 的全部环境变量，确保用户的 PATH/conda/pyenv 等生效
@@ -351,7 +435,7 @@ function menu(title, items, opts = {}) {
         wr('  ██╔══██╗██║     ██║     \n');
         wr('  ██║  ██║╚██████╗╚██████╗\n');
         wr('  ╚═╝  ╚═╝ ╚═════╝ ╚═════╝\n');
-        wr(A.R + '  ' + A.d + 'Remote Claude Code' + A.R + '\n');
+        wr(A.R + '  ' + A.d + 'RemoteCC' + A.R + '\n');
       } else {
         wr(ctr(A.b + A.cyan + '[ RemoteCC ]' + A.R) + '\n');
       }
@@ -460,7 +544,7 @@ async function pageMain() {
   const deadSessions  = metas.filter(s => !s.alive);
 
   const hdr = alive
-    ? A.green + '● 服务运行中' + A.R + A.gray + `  :${info.port}  pid ${info.pid}` + A.R
+    ? A.green + '● 服务运行中' + A.R + A.gray + `  :${info.port}` + (info.pid ? `  pid ${info.pid}` : '  local') + A.R
       + (localToken() ? '' : A.yellow + '  ⚠ token 未就绪，稍等...' + A.R)
     : A.red + '✗ 服务未运行' + A.R + A.gray + '  请先执行 remotecc start' + A.R;
 
@@ -472,7 +556,7 @@ async function pageMain() {
       const a = age(now - (s.lastActiveAt || s.createdAt));
       const ok = sockAlive(s.sessionId);
       items.push({
-        label: A.green + '● ' + A.b + s.name + A.R + A.gray + '  ' + cwd(s.workingDir) + A.R
+        label: A.green + '● ' + A.b + s.name + A.R + A.gray + '  ' + agentName(s.agent) + '  ' + cwd(s.workingDir) + A.R
              + (ok ? '' : A.red + '  [无socket]' + A.R),
         hint: a + ' ago',
         _type: 'session', _data: s,
@@ -493,8 +577,12 @@ async function pageMain() {
   }
 
   items.push({ _sep: true });
-  if (alive) items.push({ label: A.cyan + '＋  新建对话' + A.R, _type: 'new' });
-  items.push({ label: A.blue + '⏎  恢复历史对话' + A.R, hint: '从 ~/.claude 加载历史', _type: 'history' });
+  if (alive) {
+    items.push({ label: A.cyan + '＋  新建 Claude Code 对话' + A.R, _type: 'new', _agent: 'claude' });
+    items.push({ label: A.cyan + '＋  新建 Codex 对话' + A.R, _type: 'new', _agent: 'codex' });
+  }
+  items.push({ label: A.blue + '⏎  恢复 Claude Code 历史' + A.R, hint: '从 ~/.claude 加载历史', _type: 'history', _agent: 'claude' });
+  items.push({ label: A.blue + '⏎  恢复 Codex 历史' + A.R, hint: '从 ~/.codex/history.jsonl 加载历史', _type: 'history', _agent: 'codex' });
   items.push({ label: A.gray + '↻  刷新' + A.R, _type: 'refresh' });
   items.push({ label: A.gray + '✕  退出' + A.R, _type: 'quit' });
 
@@ -507,8 +595,8 @@ async function pageMain() {
   switch (item._type) {
     case 'session': return pageSession(item._data);
     case 'dead':    return pageDeadSession(item._data);
-    case 'new':     return pageNew(info);
-    case 'history': return pageHistory(info);
+    case 'new':     return pageNew(info, item._agent);
+    case 'history': return pageHistory(info, item._agent);
     case 'refresh': return pageMain();
     case 'quit':    wr(A.clear + A.show); process.exit(0);
   }
@@ -532,7 +620,7 @@ async function pageSession(s) {
   const idx = await menu(
     '会话: ' + A.b + s.name + A.R,
     items,
-    { hdr: A.gray + cwd(s.workingDir) + '  ' + s.sessionId.slice(0,8) + A.R }
+    { hdr: A.gray + agentName(s.agent) + '  ' + cwd(s.workingDir) + '  ' + s.sessionId.slice(0,8) + A.R }
   );
 
   if (idx === null || items[idx]?._type === 'back') return pageMain();
@@ -614,19 +702,19 @@ async function doDeleteSession(s, info) {
 }
 
 // ── 新建对话 ──────────────────────────────────────────────────────────────────
-async function pageNew(info) {
-  // 默认当前目录，和 claude 直接运行的逻辑一致
+async function pageNew(info, agent = 'claude') {
+  // 默认当前目录，和 CLI 直接运行的逻辑一致
   const workingDir = process.cwd();
   const name = path.basename(workingDir) || 'session';
-  await doCreate(info, workingDir, name, '');
+  await doCreate(info, workingDir, name, '', agent);
 }
 
 // ── 恢复历史对话 ──────────────────────────────────────────────────────────────
-async function pageHistory(info) {
-  const projects = loadProjects();
+async function pageHistory(info, agent = 'claude') {
+  const projects = loadProjects(agent);
 
   if (!projects.length) {
-    await notice('未找到历史对话（~/.claude/projects/ 为空）', A.yellow, 2000);
+    await notice(`未找到 ${agentName(agent)} 历史对话（${AGENTS[normalizeAgent(agent)].history} 为空）`, A.yellow, 2000);
     return pageMain();
   }
 
@@ -640,14 +728,14 @@ async function pageHistory(info) {
   items.push({ label: A.gray + '←  返回' + A.R, _type: 'back' });
 
   const idx = await menu('恢复历史对话  选择项目', items, {
-    hdr: A.gray + '来源: ~/.claude/projects/' + A.R
+    hdr: A.gray + '来源: ' + AGENTS[normalizeAgent(agent)].history + A.R
   });
 
   if (idx === null || items[idx]?._type === 'back') return pageMain();
-  return pageHistorySessions(info, items[idx]._data);
+  return pageHistorySessions(info, items[idx]._data, agent);
 }
 
-async function pageHistorySessions(info, project) {
+async function pageHistorySessions(info, project, agent = 'claude') {
   const sessions = project.sessions;
 
   const items = sessions.map(s => ({
@@ -665,17 +753,17 @@ async function pageHistorySessions(info, project) {
     { hdr: A.cyan + cwd(project.displayPath) + A.R }
   );
 
-  if (idx === null || items[idx]?._type === 'back') return pageHistory(info);
+  if (idx === null || items[idx]?._type === 'back') return pageHistory(info, agent);
 
   const sess = items[idx]._data;
   const sessCwd = sess.cwd || '~';
   const base = path.basename(sessCwd) || 'session';
   // 直接用历史会话的目录和名称，不再询问
-  await doCreate(info, sessCwd, base, sess.sessionId);
+  await doCreate(info, sessCwd, base, sess.sessionId, agent);
 }
 
 // ── 创建会话通用逻辑 ──────────────────────────────────────────────────────────
-async function doCreate(info, workingDir, name, resumeSessionId) {
+async function doCreate(info, workingDir, name, resumeSessionId, agent = 'claude') {
   if (!info || !serverAlive(info)) {
     await notice('服务未运行，请先执行 rcc-server start', A.red, 2500);
     return pageMain();
@@ -725,7 +813,7 @@ async function doCreate(info, workingDir, name, resumeSessionId) {
   }
 
   try {
-    const sid = await wsCreate('localhost', info.port, tok, workingDir, name, resumeSessionId);
+    const sid = await wsCreate('localhost', info.port, tok, workingDir, name, resumeSessionId, agent);
     wr(A.up(1) + A.erase + A.green + '  ✓ 会话已创建\n' + A.R);
     await sl(400);
 

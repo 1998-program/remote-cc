@@ -53,6 +53,7 @@
           </div>
           <!-- Meta row -->
           <div class="cl-meta">
+            <span class="cl-agent">{{ agentLabel(s.agent) }}</span>
             <span class="cl-cwd">{{ shortCwd(s.workingDir) }}</span>
             <span v-if="(s.clientCount || 0) > 1" class="cl-attached" title="Multiple clients attached">⬡{{ s.clientCount }}</span>
           </div>
@@ -136,6 +137,10 @@ function confirmDelete(s) {
 function shortCwd(p) {
   if (!p) return '';
   return p.replace(/^\/paddle\//, '~/').replace(/^\/root\//, '~/').replace(/^\/home\/[^/]+\//, '~/');
+}
+
+function agentLabel(agent) {
+  return agent === 'codex' ? 'Codex' : 'Claude';
 }
 
 function timeAgo(ts) {
@@ -257,6 +262,15 @@ function timeAgo(ts) {
   font-family: 'JetBrains Mono', monospace; font-size: 11px;
   color: var(--neon2); opacity: .7;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.cl-agent {
+  font-family: 'JetBrains Mono', monospace; font-size: 10px;
+  color: var(--neon);
+  background: color-mix(in srgb, var(--neon) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--neon) 20%, transparent);
+  border-radius: 4px;
+  padding: 1px 5px;
+  flex-shrink: 0;
 }
 .cl-attached {
   font-family: 'JetBrains Mono', monospace; font-size: 10px;

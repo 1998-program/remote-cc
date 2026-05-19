@@ -9,6 +9,20 @@
     <!-- ── New conversation ────────────────────────────────── -->
     <div v-if="tab === 'new'" class="nc-card">
       <div class="nc-field">
+        <label class="nc-label">Agent</label>
+        <div class="nc-agent-picker">
+          <button
+            v-for="item in agents"
+            :key="item.id"
+            :class="['nc-agent', { active: agent === item.id }]"
+            @click="setAgent(item.id)"
+          >
+            {{ item.name }}
+          </button>
+        </div>
+      </div>
+
+      <div class="nc-field">
         <label class="nc-label">{{ t.work_dir }}</label>
         <input
           v-model="workingDir"
@@ -41,6 +55,18 @@
 
     <!-- ── Resume from history ─────────────────────────────── -->
     <div v-else class="nc-resume">
+      <div class="nc-resume-toolbar">
+        <div class="nc-agent-picker">
+          <button
+            v-for="item in agents"
+            :key="item.id"
+            :class="['nc-agent', { active: agent === item.id }]"
+            @click="setAgent(item.id)"
+          >
+            {{ item.name }}
+          </button>
+        </div>
+      </div>
       <div v-if="histLoading" class="nc-status">{{ t.loading_hist }}</div>
       <div v-else-if="histError" class="nc-status nc-err">{{ histError }}</div>
       <div v-else-if="projects.length === 0" class="nc-status nc-muted">{{ t.no_history }}</div>
@@ -105,6 +131,11 @@ import { useI18n } from '../i18n.js';
 
 const { t } = useI18n();
 const emit = defineEmits(['start', 'cancel']);
+const agents = [
+  { id: 'claude', name: 'Claude Code' },
+  { id: 'codex', name: 'Codex' },
+];
+const agent = ref('claude');
 
 // ── Tab state ──────────────────────────────────────────────────────────────────
 const tab = ref('new');
@@ -129,7 +160,7 @@ function start() {
   const dir  = workingDir.value.trim() || '~';
   const base = dir.split('/').filter(Boolean).pop() || 'root';
   const name = sessionName.value.trim() || base;
-  emit('start', { workingDir: dir, name });
+  emit('start', { workingDir: dir, name, agent: agent.value });
 }
 
 // ── Resume from history ────────────────────────────────────────────────────────
@@ -144,12 +175,25 @@ const selectedProj = ref(null);
 const resumeName   = ref('');
 let histLoaded = false;
 
+function setAgent(nextAgent) {
+  if (agent.value === nextAgent) return;
+  agent.value = nextAgent;
+  projects.value = [];
+  expanded.clear();
+  loadingProj.clear();
+  for (const key of Object.keys(projSessions)) delete projSessions[key];
+  selectedSess.value = null;
+  selectedProj.value = null;
+  histLoaded = false;
+  if (tab.value === 'resume') loadHistory();
+}
+
 async function loadHistory() {
   if (histLoaded) return;
   histLoading.value = true;
   histError.value = '';
   try {
-    projects.value = await api.getProjects();
+    projects.value = await api.getProjects(agent.value);
     histLoaded = true;
   } catch (e) {
     histError.value = e.message;
@@ -164,7 +208,7 @@ async function toggleProj(id) {
   if (projSessions[id]) return;
   loadingProj.add(id);
   try {
-    projSessions[id] = await api.getSessions(id);
+    projSessions[id] = await api.getSessions(id, agent.value);
   } catch (_) {
     projSessions[id] = [];
   } finally {
@@ -190,7 +234,7 @@ function startResume() {
   const dir  = sess.cwd || '~';
   const base = shortBase(dir);
   const name = resumeName.value.trim() || base;
-  emit('start', { workingDir: dir, name, resumeSessionId: sess.sessionId });
+  emit('start', { workingDir: dir, name, resumeSessionId: sess.sessionId, agent: agent.value });
 }
 
 function shortBase(p) {
@@ -262,6 +306,22 @@ function fmtDate(iso) {
 .nc-input-sm { font-size: 12px; padding: 7px 10px; flex: 1; }
 
 .nc-quickpicks { display: flex; gap: 6px; flex-wrap: wrap; }
+.nc-agent-picker { display: flex; gap: 8px; flex-wrap: wrap; }
+.nc-agent {
+  background: var(--bg3); border: 1px solid var(--border);
+  border-radius: 7px; color: var(--muted); font-family: 'Syne', sans-serif;
+  font-size: 12px; font-weight: 700; padding: 7px 12px; cursor: pointer;
+  transition: background .12s, border-color .12s, color .12s;
+}
+.nc-agent:hover {
+  border-color: color-mix(in srgb, var(--neon) 30%, transparent);
+  color: var(--text);
+}
+.nc-agent.active {
+  background: color-mix(in srgb, var(--neon) 10%, transparent);
+  border-color: var(--neon);
+  color: var(--neon);
+}
 .nc-pick {
   background: var(--bg3); border: 1px solid var(--border);
   border-radius: 5px; color: var(--neon2); font-family: 'JetBrains Mono', monospace;
@@ -302,6 +362,10 @@ function fmtDate(iso) {
   flex: 1; overflow-y: auto; display: flex; flex-direction: column;
   padding: 8px 0;
   scrollbar-width: thin; scrollbar-color: var(--muted) transparent;
+}
+.nc-resume-toolbar {
+  padding: 8px 16px 12px;
+  border-bottom: 1px solid var(--border);
 }
 .nc-resume-actions { padding: 12px 16px 8px; margin-top: auto; }
 

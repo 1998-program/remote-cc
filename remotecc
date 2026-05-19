@@ -262,6 +262,68 @@ switch (cmd) {
     const err  = (s) => { console.error(`  ${C.red}✗${C.reset} ${s}`); process.exit(1); };
     const run  = (cmd, opts) => execSync(cmd, { cwd: dir, stdio: 'inherit', ...opts });
     const pipe = (cmd, opts) => execSync(cmd, { cwd: dir, stdio: 'pipe', ...opts });
+    const envFile = path.join(dir, '.env');
+
+    function readEnv() {
+      const out = {};
+      try {
+        for (const line of fs.readFileSync(envFile, 'utf8').split(/\r?\n/)) {
+          const m = line.match(/^([A-Z_][A-Z0-9_]*)=(.*)$/);
+          if (m) out[m[1]] = m[2];
+        }
+      } catch (_) {}
+      return out;
+    }
+
+    function detectBin(name) {
+      try { return pipe(`command -v ${name} 2>/dev/null || true`).toString().trim(); }
+      catch (_) { return ''; }
+    }
+
+    function prompt(question, def = '') {
+      if (!process.stdin.isTTY || !process.stdout.isTTY) return def;
+      const suffix = def ? ` [${def}]` : '';
+      process.stdout.write(`  ${question}${suffix}: `);
+      const buf = Buffer.alloc(2048);
+      try {
+        const n = fs.readSync(0, buf, 0, buf.length, null);
+        return (buf.slice(0, n).toString('utf8').trim() || def);
+      } catch (_) {
+        return def;
+      }
+    }
+
+    function writeEnv(values) {
+      const existing = fs.existsSync(envFile) ? fs.readFileSync(envFile, 'utf8').split(/\r?\n/) : [];
+      const keys = new Set(Object.keys(values));
+      const lines = existing.map(line => {
+        const m = line.match(/^([A-Z_][A-Z0-9_]*)=/);
+        if (m && keys.has(m[1])) {
+          const key = m[1];
+          keys.delete(key);
+          return `${key}=${values[key] || ''}`;
+        }
+        return line;
+      }).filter((line, idx, arr) => line || idx < arr.length - 1);
+      for (const key of keys) lines.push(`${key}=${values[key] || ''}`);
+      fs.writeFileSync(envFile, lines.join('\n') + '\n');
+      try { fs.chmodSync(envFile, 0o600); } catch (_) {}
+    }
+
+    function migrateEnv() {
+      const env = readEnv();
+      const patch = {};
+      if (!('RCC_AGENT' in env)) patch.RCC_AGENT = env.CLAUDE_BIN ? 'claude' : 'codex';
+      if (!('CLAUDE_BIN' in env)) patch.CLAUDE_BIN = detectBin('claude');
+      if (!('CODEX_BIN' in env)) patch.CODEX_BIN = detectBin('codex');
+      if (!('CLAUDE_PROXY' in env)) patch.CLAUDE_PROXY = prompt('Claude Code 代理 URL（示例 http://127.0.0.1:7890，可留空）', '');
+      if (!('CODEX_PROXY' in env)) patch.CODEX_PROXY = prompt('Codex 代理 URL（示例 http://127.0.0.1:7890，可留空）', '');
+      if (!('AGENT_NO_PROXY' in env)) patch.AGENT_NO_PROXY = process.env.AGENT_NO_PROXY || 'localhost,127.0.0.1,::1';
+      if (Object.keys(patch).length) {
+        writeEnv(patch);
+        ok('.env 已补充 Agent/Codex 兼容配置');
+      }
+    }
 
     console.log(`\n  ${C.cyan}RemoteCC 更新${C.reset}\n`);
 
@@ -296,6 +358,9 @@ switch (cmd) {
       execSync('npm run build', { cwd: path.join(dir, 'client'), stdio: 'pipe' });
       console.log(' ✓');
     } catch (e) { console.log(''); err('前端构建失败: ' + e.message); }
+
+    // 5.1. 旧版本升级补齐 Codex / Agent 代理配置
+    migrateEnv();
 
     // 6. 根据变更类型决定后续动作
     let serviceRunning = false;

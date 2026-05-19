@@ -58,16 +58,18 @@ GET /api/session-log/:sessionId
 
 响应：`text/plain`，最后 9000 行原始 PTY 输出（含 ANSI 转义码）。
 
-#### 获取 Claude 历史项目
+#### 获取 Agent 历史项目
 
 ```
-GET /api/projects
+GET /api/projects?agent=claude
+GET /api/projects?agent=codex
 ```
 
 #### 获取项目下的历史会话
 
 ```
-GET /api/sessions/:projectId
+GET /api/sessions/:projectId?agent=claude
+GET /api/sessions/:projectId?agent=codex
 ```
 
 #### 读取文档（无需认证）
@@ -206,16 +208,18 @@ GET /api/session-log/:sessionId
 
 Response: `text/plain`, last 9000 lines of raw PTY output (including ANSI escape codes).
 
-#### Get Claude History Projects
+#### Get Agent History Projects
 
 ```
-GET /api/projects
+GET /api/projects?agent=claude
+GET /api/projects?agent=codex
 ```
 
 #### Get Sessions in a Project
 
 ```
-GET /api/sessions/:projectId
+GET /api/sessions/:projectId?agent=claude
+GET /api/sessions/:projectId?agent=codex
 ```
 
 #### Read Documentation (no auth required)

@@ -26,7 +26,7 @@ bash install.sh
 |------|------|
 | Node.js | >= 18，推荐 v24 |
 | 操作系统 | Linux / macOS |
-| Claude Code | 已安装（`npm install -g @anthropic-ai/claude-code`） |
+| Agent CLI | 至少安装一个：Claude Code（`npm install -g @anthropic-ai/claude-code`）或 Codex（`npm install -g @openai/codex`） |
 | 内存 | >= 512MB |
 
 #### 1. 克隆项目
@@ -54,6 +54,11 @@ cd ../client && npm install && npm run build
 | `RC_PASS` | — | 登录密码（**必须设置**） |
 | `PORT` | `3000` | 监听端口 |
 | `IS_SANDBOX` | — | 设为 `1` 自动跳过权限确认 |
+| `CLAUDE_PROXY` | — | 仅 Claude Code CLI 使用的代理 URL |
+| `CODEX_PROXY` | — | 仅 Codex CLI 使用的代理 URL |
+| `AGENT_NO_PROXY` | `localhost,127.0.0.1,::1` | Agent CLI 的 NO_PROXY |
+
+如果 Codex 需要代理，设置 `CODEX_PROXY=http://127.0.0.1:7890` 这类本地代理地址即可。RemoteCC 只会把它注入 Codex CLI；Codex 执行任务时会排除 `HTTP_PROXY` / `HTTPS_PROXY` / `ALL_PROXY` 等代理变量，避免影响项目命令。
 
 #### 4. 安装命令行工具
 
@@ -165,7 +170,7 @@ The script automatically detects the environment, installs dependencies, builds 
 |------|-------------|
 | Node.js | >= 18, v24 recommended |
 | OS | Linux / macOS |
-| Claude Code | Installed (`npm install -g @anthropic-ai/claude-code`) |
+| Agent CLI | Install at least one: Claude Code (`npm install -g @anthropic-ai/claude-code`) or Codex (`npm install -g @openai/codex`) |
 | Memory | >= 512MB |
 
 #### 1. Clone
@@ -193,6 +198,11 @@ cd ../client && npm install && npm run build
 | `RC_PASS` | — | Login password (**required**) |
 | `PORT` | `3000` | Listen port |
 | `IS_SANDBOX` | — | Set to `1` to skip permission prompts |
+| `CLAUDE_PROXY` | — | Proxy URL used only by the Claude Code CLI |
+| `CODEX_PROXY` | — | Proxy URL used only by the Codex CLI |
+| `AGENT_NO_PROXY` | `localhost,127.0.0.1,::1` | NO_PROXY for agent CLIs |
+
+If Codex needs a proxy, set a local proxy URL such as `CODEX_PROXY=http://127.0.0.1:7890`. RemoteCC injects it only into the Codex CLI; Codex child tasks exclude `HTTP_PROXY` / `HTTPS_PROXY` / `ALL_PROXY` so project commands are not forced through the proxy.
 
 #### 4. Install CLI Tools
 

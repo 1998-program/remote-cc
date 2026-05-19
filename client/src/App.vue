@@ -254,7 +254,7 @@ const deadSessions  = computed(() => sessionList.value.filter(s => !s.alive));
 
 // ── Terminal sessions (client-side instances) ─────────────────────────────────
 // termList: reactive array of session objects — Vue can track array mutations
-// Each entry: { sid, ws, alive, wsStarted, name, workingDir, resumeSessionId, attachSessionId, _destroy }
+// Each entry: { sid, ws, alive, wsStarted, name, workingDir, agent, resumeSessionId, attachSessionId, _destroy }
 const termList = reactive([]);   // Array<SessionEntry>
 const termRefs = {};             // { [sid]: Terminal component instance }
 
@@ -263,7 +263,7 @@ const currentMeta = computed(() => {
   const fromList = sessionList.value.find(s => s.sessionId === activeSessionId.value);
   if (fromList) return fromList;
   const entry = termList.find(e => e.sid === activeSessionId.value);
-  if (entry) return { sessionId: entry.sid, name: entry.name, workingDir: entry.workingDir, alive: entry.alive, clientCount: 0 };
+  if (entry) return { sessionId: entry.sid, name: entry.name, workingDir: entry.workingDir, agent: entry.agent, alive: entry.alive, clientCount: 0 };
   return null;
 });
 
@@ -305,6 +305,7 @@ function connectEntryWS(entry) {
         ws.send(JSON.stringify({
           type: 'start',
           workingDir: entry.workingDir,
+          agent: entry.agent || 'claude',
           resumeSessionId: entry.resumeSessionId || '',
           name: entry.name,
           cols, rows,
@@ -431,6 +432,7 @@ function openSession(s) {
     wsStarted: false,
     name: s.name || s.sessionId,
     workingDir: s.workingDir || '',
+    agent: s.agent || 'claude',
     resumeSessionId: '',
     attachSessionId: s.sessionId,
     _destroy: null,
@@ -444,10 +446,11 @@ function openSession(s) {
   nextTick(() => connectEntryWS(entry));
 }
 
-function startSession({ workingDir, name, resumeSessionId }) {
+function startSession({ workingDir, name, resumeSessionId, agent = 'claude' }) {
   // Deduplicate pending sessions
   for (const entry of termList) {
     if (entry.attachSessionId === '' &&
+        (entry.agent || 'claude') === agent &&
         entry.workingDir === workingDir &&
         (entry.resumeSessionId || '') === (resumeSessionId || '')) {
       activeSessionId.value = entry.sid;
@@ -464,6 +467,7 @@ function startSession({ workingDir, name, resumeSessionId }) {
     wsStarted: false,
     name: name || ((workingDir || '~').split('/').pop() || 'root'),
     workingDir: workingDir || '~',
+    agent,
     resumeSessionId: resumeSessionId || '',
     attachSessionId: '',
     _destroy: null,

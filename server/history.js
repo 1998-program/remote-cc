@@ -1,13 +1,18 @@
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const readline = require('readline');
+const { normalizeAgent } = require('./agent-config');
 
-const PROJECTS_DIR = path.join(os.homedir(), '.claude', 'projects');
+const CLAUDE_PROJECTS_DIR = path.join(os.homedir(), '.claude', 'projects');
+const CODEX_HISTORY_FILE = path.join(os.homedir(), '.codex', 'history.jsonl');
 
-function getProjects() {
-  if (!fs.existsSync(PROJECTS_DIR)) return [];
-  const dirs = fs.readdirSync(PROJECTS_DIR, { withFileTypes: true })
+function getProjects(agent = 'claude') {
+  return normalizeAgent(agent) === 'codex' ? getCodexProjects() : getClaudeProjects();
+}
+
+function getClaudeProjects() {
+  if (!fs.existsSync(CLAUDE_PROJECTS_DIR)) return [];
+  const dirs = fs.readdirSync(CLAUDE_PROJECTS_DIR, { withFileTypes: true })
     .filter(d => d.isDirectory())
     .map(d => d.name);
 
@@ -27,8 +32,12 @@ function getProjects() {
   return projects.sort((a, b) => new Date(b.lastModified) - new Date(a.lastModified));
 }
 
-function getSessions(projectId) {
-  const dir = path.join(PROJECTS_DIR, projectId);
+function getSessions(projectId, agent = 'claude') {
+  return normalizeAgent(agent) === 'codex' ? getCodexSessions(projectId) : getClaudeSessions(projectId);
+}
+
+function getClaudeSessions(projectId) {
+  const dir = path.join(CLAUDE_PROJECTS_DIR, projectId);
   if (!fs.existsSync(dir)) return [];
   const files = fs.readdirSync(dir)
     .filter(f => f.endsWith('.jsonl'))
@@ -87,15 +96,16 @@ function readSessionPreview(filePath) {
   }
 }
 
-function readSession(sessionId) {
+function readSession(sessionId, agent = 'claude') {
+  if (normalizeAgent(agent) === 'codex') return [];
   // search all project dirs for this session
-  if (!fs.existsSync(PROJECTS_DIR)) return [];
-  const dirs = fs.readdirSync(PROJECTS_DIR, { withFileTypes: true })
+  if (!fs.existsSync(CLAUDE_PROJECTS_DIR)) return [];
+  const dirs = fs.readdirSync(CLAUDE_PROJECTS_DIR, { withFileTypes: true })
     .filter(d => d.isDirectory())
     .map(d => d.name);
 
   for (const dir of dirs) {
-    const filePath = path.join(PROJECTS_DIR, dir, `${sessionId}.jsonl`);
+    const filePath = path.join(CLAUDE_PROJECTS_DIR, dir, `${sessionId}.jsonl`);
     if (fs.existsSync(filePath)) {
       const content = fs.readFileSync(filePath, 'utf8');
       const lines = content.trim().split('\n').filter(Boolean);
@@ -103,6 +113,54 @@ function readSession(sessionId) {
     }
   }
   return [];
+}
+
+function getCodexHistoryEntries() {
+  if (!fs.existsSync(CODEX_HISTORY_FILE)) return [];
+  try {
+    return fs.readFileSync(CODEX_HISTORY_FILE, 'utf8')
+      .trim()
+      .split('\n')
+      .filter(Boolean)
+      .map(line => {
+        try { return JSON.parse(line); } catch (_) { return null; }
+      })
+      .filter(item => item && item.session_id);
+  } catch (_) {
+    return [];
+  }
+}
+
+function getCodexProjects() {
+  const sessions = getCodexSessions('codex');
+  if (!sessions.length) return [];
+  return [{
+    id: 'codex',
+    displayPath: '~/.codex/history.jsonl',
+    sessionCount: sessions.length,
+    lastModified: sessions[0].lastModified,
+  }];
+}
+
+function getCodexSessions(projectId) {
+  if (projectId !== 'codex') return [];
+  const byId = new Map();
+  for (const item of getCodexHistoryEntries()) {
+    const id = item.session_id;
+    const current = byId.get(id) || {
+      sessionId: id,
+      projectId: 'codex',
+      lastModified: new Date(0).toISOString(),
+      lastMessage: '',
+      messageCount: 0,
+      cwd: '',
+    };
+    current.messageCount += 1;
+    if (item.text) current.lastMessage = String(item.text).slice(0, 100);
+    if (item.ts) current.lastModified = new Date(item.ts * 1000).toISOString();
+    byId.set(id, current);
+  }
+  return Array.from(byId.values()).sort((a, b) => new Date(b.lastModified) - new Date(a.lastModified));
 }
 
 module.exports = { getProjects, getSessions, readSession };

@@ -4,30 +4,9 @@ const { v4: uuidv4 } = require('uuid');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const { normalizeAgent, findAgentBin, getAgentConfig, buildAgentEnv } = require('./agent-config');
 
 const IS_WIN = process.platform === 'win32';
-
-// Claude 二进制路径：优先环境变量，其次平台默认位置
-function findClaudeBin() {
-  if (process.env.CLAUDE_BIN) return process.env.CLAUDE_BIN;
-  if (IS_WIN) {
-    // Windows: 常见安装路径
-    const candidates = [
-      path.join(os.homedir(), 'AppData', 'Roaming', 'npm', 'claude.cmd'),
-      path.join(os.homedir(), 'AppData', 'Roaming', 'npm', 'claude'),
-      'claude.cmd',
-      'claude',
-    ];
-    for (const c of candidates) {
-      try { fs.accessSync(c); return c; } catch (_) {}
-    }
-    return 'claude.cmd'; // fallback，依赖 PATH
-  }
-  // Unix: nvm 默认路径
-  return '/root/.nvm/versions/node/v24.14.0/bin/claude';
-}
-
-const CLAUDE_BIN = findClaudeBin();
 const MAX_SESSIONS = 20;
 const SCROLLBACK_LIMIT = 500 * 1024; // 500KB
 
@@ -55,6 +34,12 @@ try {
 function getSocketPath(sessionId) {
   if (IS_WIN) return `\\\\.\\pipe\\rcc-${sessionId}`;
   return path.join(RCC_DIR, 'sockets', `${sessionId}.sock`);
+}
+
+function expandHome(input) {
+  if (!input || input === '~') return os.homedir();
+  if (input.startsWith('~/') || input.startsWith('~\\')) return path.join(os.homedir(), input.slice(2));
+  return input;
 }
 
 /**
@@ -128,7 +113,7 @@ function saveMeta() {
   const data = [];
   for (const [id, s] of sessions) {
     data.push({
-      sessionId: id, name: s.name, workingDir: s.workingDir,
+      sessionId: id, name: s.name, workingDir: s.workingDir, agent: s.agent || 'claude',
       alive: s.exitCode === null && !!s.ptyProcess,
       exitCode: s.exitCode, createdAt: s.createdAt, lastActiveAt: s.lastActiveAt,
       logPath: s.logPath, socketPath: s.socketPath,
@@ -223,7 +208,7 @@ function startSocketServer(sessionId) {
 
 // ── Create session ────────────────────────────────────────────────────────────
 
-function createSession(ws, wsId, { workingDir, resumeSessionId, name, cols = 80, rows = 24, env: clientEnv = {} }) {
+function createSession(ws, wsId, { workingDir, resumeSessionId, name, agent, cols = 80, rows = 24, env: clientEnv = {} }) {
   // 防重复：同一个 wsId 已有 session，直接复用
   if (wsToSession.has(wsId)) {
     const existing = wsToSession.get(wsId);
@@ -235,14 +220,17 @@ function createSession(ws, wsId, { workingDir, resumeSessionId, name, cols = 80,
     wsToSession.delete(wsId);
   }
 
-  const cwd = (workingDir && workingDir.trim()) ? workingDir.trim()
+  const cwd = (workingDir && workingDir.trim()) ? expandHome(workingDir.trim())
     : (IS_WIN ? process.env.USERPROFILE || 'C:\\' : process.env.HOME || '/tmp');
+  const agentId = normalizeAgent(agent);
+  const agentCfg = getAgentConfig(agentId);
 
-  // 全局防重复：同 cwd + resumeSessionId 已有活跃 session → 直接 attach
+  // 全局防重复：同 agent + cwd + resumeSessionId 已有活跃 session → 直接 attach
   for (const [existingId, s] of sessions) {
     if (
       s.exitCode === null &&
       s.ptyProcess &&
+      (s.agent || 'claude') === agentId &&
       s.workingDir === cwd &&
       (s.resumeSessionId || '') === (resumeSessionId || '')
     ) {
@@ -266,26 +254,22 @@ function createSession(ws, wsId, { workingDir, resumeSessionId, name, cols = 80,
   // 防止 write-after-end 等 stream 错误未处理导致进程崩溃
   logStream.on('error', () => {});
 
-  const args = [];
-  // IS_SANDBOX=1 时自动启用危险模式，否则普通启动
-  if (process.env.IS_SANDBOX === '1') {
-    args.push('--dangerously-skip-permissions');
-  }
-  if (resumeSessionId) args.push('--resume', resumeSessionId);
+  const args = agentCfg.buildArgs({ cwd, resumeSessionId });
+  const agentBin = findAgentBin(agentId);
 
-  // Windows: node-pty 用 ConPTY，直接 spawn claude.cmd
+  // Windows: node-pty 用 ConPTY，直接 spawn CLI
   // 需要设置 useConpty: true，且不传 TERM（Windows 不需要）
+  const agentEnv = buildAgentEnv(agentId, process.env, clientEnv);
   const spawnOpts = IS_WIN
     ? {
         useConpty: true,
         cols, rows, cwd,
-        env: { ...process.env, ...clientEnv, CLAUDE_CODE_DISABLE_VIRTUAL_SCROLL: '1' },
+        env: { ...agentEnv, CLAUDE_CODE_DISABLE_VIRTUAL_SCROLL: '1' },
       }
     : {
         name: 'xterm-256color', cols, rows, cwd,
         env: {
-          ...process.env,
-          ...clientEnv,                          // 客户端环境变量（优先级高于服务端）
+          ...agentEnv,
           TERM: 'xterm-256color',
           COLORTERM: 'truecolor',
           CLAUDE_CODE_DISABLE_VIRTUAL_SCROLL: '1',
@@ -294,16 +278,16 @@ function createSession(ws, wsId, { workingDir, resumeSessionId, name, cols = 80,
 
   let ptyProcess;
   try {
-    ptyProcess = pty.spawn(CLAUDE_BIN, args, spawnOpts);
+    ptyProcess = pty.spawn(agentBin, args, spawnOpts);
   } catch (err) {
-    try { ws.send(JSON.stringify({ type: 'error', message: `Failed to spawn: ${err.message}` })); } catch (_) {}
+    try { ws.send(JSON.stringify({ type: 'error', message: `Failed to spawn ${agentCfg.label}: ${err.message}` })); } catch (_) {}
     logStream.end();
     return;
   }
 
   const client = wsClient(ws);
   const session = {
-    name: sessionName, workingDir: cwd,
+    name: sessionName, workingDir: cwd, agent: agentId,
     resumeSessionId: resumeSessionId || '',
     ptyProcess, clients: new Set([client]),
     buffer: '', logPath, logStream,
@@ -499,7 +483,7 @@ function closeWS(wsId) {
 
 function getSessionList() {
   return Array.from(sessions.entries()).map(([id, s]) => ({
-    sessionId: id, name: s.name, workingDir: s.workingDir,
+    sessionId: id, name: s.name, workingDir: s.workingDir, agent: s.agent || 'claude',
     alive: s.exitCode === null && !!s.ptyProcess,
     exitCode: s.exitCode,
     createdAt: s.createdAt, lastActiveAt: s.lastActiveAt,

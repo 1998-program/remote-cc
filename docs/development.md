@@ -38,7 +38,7 @@ remote-cc/
 │   ├── index.js        # HTTP + WS 入口
 │   ├── auth.js         # Token 认证 + 本地 token
 │   ├── pty-manager.js  # PTY 会话池（核心）
-│   └── history.js      # ~/.claude/projects/ 读取
+│   └── history.js      # Agent history reader
 ├── client/
 │   └── src/
 │       ├── App.vue          # 主组件：认证/路由/WS/会话管理
@@ -122,7 +122,7 @@ remote-cc/
 │   ├── index.js        # HTTP + WS entry point
 │   ├── auth.js         # Token auth + local token
 │   ├── pty-manager.js  # PTY session pool (core)
-│   └── history.js      # ~/.claude/projects/ reader
+│   └── history.js      # Agent history reader
 ├── client/
 │   └── src/
 │       ├── App.vue          # Main: auth/routing/WS/session mgmt
