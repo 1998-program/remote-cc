@@ -270,6 +270,16 @@ Displays a large-text banner and session list on launch. `rcc-tui` reads `~/.rcc
 
 ## 更新记录 / Changelog
 
+### 2026-05-19
+
+**Codex Agent**：新建会话支持选择 Claude Code 或 Codex；Web、TUI 和会话列表都会保留并展示 Agent 类型。
+
+**历史恢复**：Claude Code 继续读取 `~/.claude/projects/`，Codex 读取 `~/.codex/history.jsonl`。
+
+**Agent 代理**：安装和 `remotecc update` 可补充 `CODEX_PROXY` / `CLAUDE_PROXY`；代理只注入 Agent CLI，不作为 RemoteCC 全局代理。
+
+**服务状态**：`rcc-tui` 改进服务检测；`rcc-server status/start` 在端口被占用时显示占用进程。
+
 ### 2026-05-12
 
 **文件浏览器**：Web 界面新增文件浏览功能。顶栏点击 ⊞ 打开，支持目录导航、文本/图片预览、复制路径、一键 cd 到终端。

@@ -141,6 +141,13 @@ Inside any session: **`Ctrl+]`** goes back to the menu without killing the agent
 
 ## Changelog
 
+### 2026-05-19
+
+- **Codex support**: new sessions can choose Claude Code or Codex, and active sessions show the agent type
+- **History resume**: supports both `~/.claude/projects/` and `~/.codex/history.jsonl`
+- **Agent proxy**: installer and updater support `CODEX_PROXY` / `CLAUDE_PROXY`, scoped only to the selected agent CLI
+- **Service management**: fixes `rcc-tui` service-state detection and shows the owning process when a port is occupied
+
 ### 2026-05-12
 
 - **File browser**: browse server files, preview code/images, double-click for fullscreen, copy path

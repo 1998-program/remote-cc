@@ -141,6 +141,13 @@ remotecc attach <名称>  # 直接进入指定名称的会话
 
 ## 更新日志
 
+### 2026-05-19
+
+- **Codex 支持**：新建会话可选择 Claude Code 或 Codex，活跃会话会显示 Agent 类型
+- **历史恢复**：支持从 `~/.claude/projects/` 和 `~/.codex/history.jsonl` 恢复历史对话
+- **Agent 代理**：安装和更新流程支持 `CODEX_PROXY` / `CLAUDE_PROXY`，代理只注入对应 Agent CLI
+- **服务管理**：修复 `rcc-tui` 服务状态误判，端口占用时 `rcc-server` 会显示占用进程
+
 ### 2026-05-12
 
 - **文件浏览器**：Web 界面新增文件浏览功能，支持代码/图片预览、双击全屏、复制路径
