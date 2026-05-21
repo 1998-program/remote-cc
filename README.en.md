@@ -144,7 +144,7 @@ Inside any session: **`Ctrl+]`** goes back to the menu without killing the agent
 ### 2026-05-21
 
 - **Codex history resume**: reads real session metadata from `~/.codex/sessions/`, groups sessions by working directory, and resumes with the correct cwd
-- **Resume UI**: Codex history auto-expands and preloads sessions without the extra `~/.codex/history.jsonl` layer
+- **Resume UI**: Web/TUI Codex history is grouped by working directory without the extra `~/.codex/history.jsonl` layer
 - **Mobile terminal**: improves xterm bottom-locking after async writes to reduce blank space under Codex output
 
 ### 2026-05-19

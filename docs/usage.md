@@ -274,7 +274,7 @@ Displays a large-text banner and session list on launch. `rcc-tui` reads `~/.rcc
 
 **Codex 历史恢复**：恢复列表改为读取 `~/.codex/sessions/` 中的真实会话元数据，按工作目录分组；恢复时会使用原始 cwd，不再退回 `~`。
 
-**恢复界面**：Codex 历史自动展开并预加载会话，去掉 `~/.codex/history.jsonl` 这一层无意义容器。
+**恢复界面**：Web/TUI 的 Codex 历史按工作目录展示，去掉 `~/.codex/history.jsonl` 这一层无意义容器。
 
 **移动端终端**：优化 xterm 异步写入后的自动锁底和用户滚动识别，减少 Codex 输出底部留白。
 

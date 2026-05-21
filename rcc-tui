@@ -32,10 +32,11 @@ const SOCK_DIR    = path.join(RCC_DIR, 'sockets');
 const LOCAL_TOKEN = path.join(RCC_DIR, 'local.token');
 const CLAUDE_DIR  = path.join(HOME, '.claude', 'projects');
 const CODEX_HISTORY_FILE = path.join(HOME, '.codex', 'history.jsonl');
+const CODEX_SESSIONS_DIR = path.join(HOME, '.codex', 'sessions');
 
 const AGENTS = {
   claude: { id: 'claude', name: 'Claude Code', history: '~/.claude/projects/' },
-  codex:  { id: 'codex',  name: 'Codex',       history: '~/.codex/history.jsonl' },
+  codex:  { id: 'codex',  name: 'Codex',       history: '~/.codex/sessions/' },
 };
 function normalizeAgent(agent) { return AGENTS[agent] ? agent : 'claude'; }
 function agentName(agent) { return AGENTS[normalizeAgent(agent)].name; }
@@ -152,32 +153,158 @@ function loadClaudeProjects() {
 function loadCodexProjects() {
   const sessions = loadCodexSessions();
   if (!sessions.length) return [];
-  return [{ id: 'codex', displayPath: CODEX_HISTORY_FILE, sessions }];
+
+  const byProject = new Map();
+  for (const session of sessions) {
+    const current = byProject.get(session.projectId) || {
+      id: session.projectId,
+      displayPath: session.cwd || '~',
+      sessions: [],
+    };
+    current.sessions.push(session);
+    byProject.set(session.projectId, current);
+  }
+
+  return Array.from(byProject.values()).sort((a, b) =>
+    new Date(b.sessions[0]?.lastModified || 0) - new Date(a.sessions[0]?.lastModified || 0));
 }
 
 function loadCodexSessions() {
+  const byId = loadCodexSessionsFromFiles();
+  for (const item of loadCodexHistoryEntries()) {
+    const id = item.session_id;
+    const lastModified = item.ts ? new Date(item.ts * 1000).toISOString() : '';
+    const current = byId.get(id) || {
+      sessionId: id,
+      cwd: '',
+      lastMessage: '',
+      messageCount: 0,
+      lastModified: new Date(0).toISOString(),
+    };
+    current.historyCount = (current.historyCount || 0) + 1;
+    if (item.text) current.lastMessage = String(item.text).slice(0, 80);
+    if (lastModified && new Date(lastModified) > new Date(current.lastModified)) current.lastModified = lastModified;
+    byId.set(id, current);
+  }
+
+  return Array.from(byId.values())
+    .map(normalizeCodexSession)
+    .sort((a, b) => new Date(b.lastModified) - new Date(a.lastModified));
+}
+
+function loadCodexHistoryEntries() {
   if (!fs.existsSync(CODEX_HISTORY_FILE)) return [];
-  const byId = new Map();
   try {
-    const lines = fs.readFileSync(CODEX_HISTORY_FILE, 'utf8').trim().split('\n').filter(Boolean);
-    for (const line of lines) {
-      let obj;
-      try { obj = JSON.parse(line); } catch (_) { continue; }
-      if (!obj?.session_id) continue;
-      const current = byId.get(obj.session_id) || {
-        sessionId: obj.session_id,
-        cwd: '',
-        lastMessage: '',
-        messageCount: 0,
-        lastModified: new Date(0).toISOString(),
-      };
-      current.messageCount += 1;
-      if (obj.text) current.lastMessage = String(obj.text).slice(0, 80);
-      if (obj.ts) current.lastModified = new Date(obj.ts * 1000).toISOString();
-      byId.set(obj.session_id, current);
+    return fs.readFileSync(CODEX_HISTORY_FILE, 'utf8')
+      .trim()
+      .split('\n')
+      .filter(Boolean)
+      .map(line => { try { return JSON.parse(line); } catch (_) { return null; } })
+      .filter(item => item?.session_id);
+  } catch (_) {
+    return [];
+  }
+}
+
+function loadCodexSessionsFromFiles() {
+  const byId = new Map();
+  for (const filePath of listCodexSessionFiles()) {
+    const session = readCodexSessionFile(filePath);
+    if (session?.sessionId) byId.set(session.sessionId, session);
+  }
+  return byId;
+}
+
+function listCodexSessionFiles() {
+  if (!fs.existsSync(CODEX_SESSIONS_DIR)) return [];
+  const files = [];
+  const stack = [CODEX_SESSIONS_DIR];
+  while (stack.length) {
+    const dir = stack.pop();
+    let entries = [];
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch (_) { continue; }
+    for (const entry of entries) {
+      const fullPath = path.join(dir, entry.name);
+      if (entry.isDirectory()) stack.push(fullPath);
+      else if (entry.isFile() && entry.name.endsWith('.jsonl')) files.push(fullPath);
     }
-  } catch (_) {}
-  return Array.from(byId.values()).sort((a, b) => new Date(b.lastModified) - new Date(a.lastModified));
+  }
+  return files;
+}
+
+function readCodexSessionFile(filePath) {
+  let stat;
+  try { stat = fs.statSync(filePath); } catch (_) { return null; }
+  const session = {
+    sessionId: '',
+    cwd: '',
+    lastMessage: '',
+    messageCount: 0,
+    lastModified: stat.mtime.toISOString(),
+  };
+
+  let content = '';
+  try { content = fs.readFileSync(filePath, 'utf8'); } catch (_) { return null; }
+  for (const line of content.split('\n')) {
+    if (!line.trim()) continue;
+    let obj;
+    try { obj = JSON.parse(line); } catch (_) { continue; }
+
+    if (obj.timestamp && new Date(obj.timestamp) > new Date(session.lastModified)) {
+      session.lastModified = new Date(obj.timestamp).toISOString();
+    }
+
+    if (obj.type === 'session_meta' && obj.payload) {
+      if (!session.sessionId && obj.payload.id) session.sessionId = obj.payload.id;
+      if (!session.cwd && obj.payload.cwd) session.cwd = obj.payload.cwd;
+      if (obj.payload.timestamp && new Date(obj.payload.timestamp) > new Date(session.lastModified)) {
+        session.lastModified = new Date(obj.payload.timestamp).toISOString();
+      }
+    }
+
+    if (obj.type === 'turn_context' && obj.payload?.cwd && !session.cwd) {
+      session.cwd = obj.payload.cwd;
+    }
+
+    if (obj.type === 'response_item' && obj.payload?.type === 'message') {
+      const role = obj.payload.role;
+      if (role === 'user' || role === 'assistant') session.messageCount += 1;
+      if (role === 'user') {
+        const text = extractCodexMessageText(obj.payload.content);
+        if (text && !isEnvironmentContext(text)) session.lastMessage = text.slice(0, 80);
+      }
+    }
+  }
+
+  return session;
+}
+
+function extractCodexMessageText(content) {
+  if (typeof content === 'string') return content;
+  if (!Array.isArray(content)) return '';
+  const textPart = content.find(part => part && (part.type === 'input_text' || part.type === 'output_text' || part.type === 'text'));
+  return textPart?.text || '';
+}
+
+function isEnvironmentContext(text) {
+  return String(text).trim().startsWith('<environment_context>');
+}
+
+function normalizeCodexSession(session) {
+  const cwd = session.cwd || '~';
+  return {
+    sessionId: session.sessionId,
+    cwd,
+    projectId: codexProjectId(cwd),
+    lastMessage: session.lastMessage || '',
+    messageCount: session.messageCount || session.historyCount || 0,
+    lastModified: session.lastModified || new Date(0).toISOString(),
+  };
+}
+
+function codexProjectId(cwd) {
+  const hash = crypto.createHash('sha1').update(cwd || '~').digest('hex').slice(0, 16);
+  return `codex-${hash}`;
 }
 
 function loadClaudeSessions(projectId) {
@@ -582,7 +709,7 @@ async function pageMain() {
     items.push({ label: A.cyan + '＋  新建 Codex 对话' + A.R, _type: 'new', _agent: 'codex' });
   }
   items.push({ label: A.blue + '⏎  恢复 Claude Code 历史' + A.R, hint: '从 ~/.claude 加载历史', _type: 'history', _agent: 'claude' });
-  items.push({ label: A.blue + '⏎  恢复 Codex 历史' + A.R, hint: '从 ~/.codex/history.jsonl 加载历史', _type: 'history', _agent: 'codex' });
+  items.push({ label: A.blue + '⏎  恢复 Codex 历史' + A.R, hint: '从 ~/.codex/sessions 加载历史', _type: 'history', _agent: 'codex' });
   items.push({ label: A.gray + '↻  刷新' + A.R, _type: 'refresh' });
   items.push({ label: A.gray + '✕  退出' + A.R, _type: 'quit' });
 
