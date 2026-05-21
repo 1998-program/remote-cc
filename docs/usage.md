@@ -39,7 +39,7 @@ Agent PTY（持续运行）
 #### 新建对话
 
 - **New 标签**：选择 Claude Code 或 Codex，输入工作目录和会话名 → 启动
-- **Resume 标签**：从 `~/.claude/projects/` 或 `~/.codex/history.jsonl` 选历史对话 → 恢复
+- **Resume 标签**：从 Claude Code / Codex 历史中按工作目录选择对话 → 恢复
 - **代理**：安装时可配置 `CODEX_PROXY` / `CLAUDE_PROXY`；代理只用于 Agent CLI，不会作为 RemoteCC 全局代理。
 
 #### 终端操作
@@ -171,7 +171,7 @@ Open `http://<server>:8310` in a browser and log in.
 #### New Conversation
 
 - **New tab**: Choose Claude Code or Codex, enter working directory and session name → start
-- **Resume tab**: Browse `~/.claude/projects/` or `~/.codex/history.jsonl` history → resume
+- **Resume tab**: Browse Claude Code / Codex history grouped by working directory → resume
 - **Proxy**: Configure `CODEX_PROXY` / `CLAUDE_PROXY` during installation; proxy variables are scoped to the agent CLI and are not global RemoteCC proxy settings.
 
 #### Terminal Shortcuts
@@ -270,11 +270,19 @@ Displays a large-text banner and session list on launch. `rcc-tui` reads `~/.rcc
 
 ## 更新记录 / Changelog
 
+### 2026-05-21
+
+**Codex 历史恢复**：恢复列表改为读取 `~/.codex/sessions/` 中的真实会话元数据，按工作目录分组；恢复时会使用原始 cwd，不再退回 `~`。
+
+**恢复界面**：Codex 历史自动展开并预加载会话，去掉 `~/.codex/history.jsonl` 这一层无意义容器。
+
+**移动端终端**：优化 xterm 异步写入后的自动锁底和用户滚动识别，减少 Codex 输出底部留白。
+
 ### 2026-05-19
 
 **Codex Agent**：新建会话支持选择 Claude Code 或 Codex；Web、TUI 和会话列表都会保留并展示 Agent 类型。
 
-**历史恢复**：Claude Code 继续读取 `~/.claude/projects/`，Codex 读取 `~/.codex/history.jsonl`。
+**历史恢复**：Claude Code 继续读取 `~/.claude/projects/`，Codex 支持恢复历史对话。
 
 **Agent 代理**：安装和 `remotecc update` 可补充 `CODEX_PROXY` / `CLAUDE_PROXY`；代理只注入 Agent CLI，不作为 RemoteCC 全局代理。
 

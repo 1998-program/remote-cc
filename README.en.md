@@ -31,7 +31,7 @@ This is not screenshots or log forwarding. It is **true bidirectional real-time 
 - **Real terminal** — full color, interactive, and mouse support, just like using it locally
 - **Real-time multi-client sync** — phone, tablet, and desktop all share the same agent session
 - **Persistent sessions** — close the browser or drop SSH, the agent keeps running; reconnect anytime
-- **History resume** — reads `~/.claude/projects/` or `~/.codex/history.jsonl`, resume any past conversation
+- **History resume** — reads Claude Code / Codex history and resumes conversations in the right working directory
 - **File browser** — browse server files in the web UI, preview code/images, copy paths
 - **Session manager** — run `remotecc` on the server to get a visual menu for managing sessions
 - **Detach shortcut** — `Ctrl+]` goes back to the menu without killing the agent
@@ -104,7 +104,7 @@ bash install.sh
 
 The install script is fully interactive and auto-detects your environment.
 
-RemoteCC auto-detects Claude Code and Codex; at least one of them must be installed. New sessions can choose the agent, and history resume supports both `~/.claude/projects/` and `~/.codex/history.jsonl`.
+RemoteCC auto-detects Claude Code and Codex; at least one of them must be installed. New sessions can choose the agent, and history resume supports Claude Code's `~/.claude/projects/` plus Codex session records from `~/.codex/sessions/`.
 
 If Codex or Claude Code needs a proxy, configure `CODEX_PROXY` / `CLAUDE_PROXY` in the installer. The proxy is injected only into the selected agent CLI, not into RemoteCC globally. The prompt uses `http://127.0.0.1:7890` as a generic example.
 
@@ -141,10 +141,16 @@ Inside any session: **`Ctrl+]`** goes back to the menu without killing the agent
 
 ## Changelog
 
+### 2026-05-21
+
+- **Codex history resume**: reads real session metadata from `~/.codex/sessions/`, groups sessions by working directory, and resumes with the correct cwd
+- **Resume UI**: Codex history auto-expands and preloads sessions without the extra `~/.codex/history.jsonl` layer
+- **Mobile terminal**: improves xterm bottom-locking after async writes to reduce blank space under Codex output
+
 ### 2026-05-19
 
 - **Codex support**: new sessions can choose Claude Code or Codex, and active sessions show the agent type
-- **History resume**: supports both `~/.claude/projects/` and `~/.codex/history.jsonl`
+- **History resume**: supports restoring conversations from Claude Code / Codex history
 - **Agent proxy**: installer and updater support `CODEX_PROXY` / `CLAUDE_PROXY`, scoped only to the selected agent CLI
 - **Service management**: fixes `rcc-tui` service-state detection and shows the owning process when a port is occupied
 

@@ -136,7 +136,10 @@ let lastW = 0, lastH = 0;
 // ── 自动锁底 + 上划暂停更新 ──────────────────────────────────────────────────
 let userScrolled = false;       // 用户是否主动上划
 let scrollResumeTimer = null;   // 停止滑动后恢复锁底的计时器
+let userScrollIntentUntil = 0;   // 只有用户输入触发的滚动才暂停锁底
+let autoScrollUntil = 0;         // 程序写入触发的滚动不应暂停锁底
 const pendingWrites = [];        // 用户上划时缓存的输出
+let boundViewport = null;
 
 // 检测用户是否滑到底部附近（20px 内认为在底部）
 function isNearBottom() {
@@ -152,17 +155,54 @@ function onViewportScroll() {
     userScrolled = false;
     clearTimeout(scrollResumeTimer);
     flushPending();
-  } else {
+  } else if (Date.now() < autoScrollUntil) {
+    return;
+  } else if (Date.now() < userScrollIntentUntil) {
     // 上划 → 暂停自动更新
     userScrolled = true;
   }
 }
 
+function markUserScrollIntent() {
+  userScrollIntentUntil = Date.now() + 800;
+}
+
+function bindViewport(vp) {
+  if (!vp || boundViewport === vp) return;
+  unbindViewport();
+  boundViewport = vp;
+  vp.addEventListener('scroll', onViewportScroll, { passive: true });
+  vp.addEventListener('wheel', markUserScrollIntent, { passive: true });
+  vp.addEventListener('touchstart', markUserScrollIntent, { passive: true });
+  vp.addEventListener('pointerdown', markUserScrollIntent, { passive: true });
+}
+
+function unbindViewport() {
+  if (!boundViewport) return;
+  boundViewport.removeEventListener('scroll', onViewportScroll);
+  boundViewport.removeEventListener('wheel', markUserScrollIntent);
+  boundViewport.removeEventListener('touchstart', markUserScrollIntent);
+  boundViewport.removeEventListener('pointerdown', markUserScrollIntent);
+  boundViewport = null;
+}
+
+function scrollToBottomSoon() {
+  autoScrollUntil = Date.now() + 500;
+  clearTimeout(scrollResumeTimer);
+  scrollResumeTimer = setTimeout(() => {
+    term?.scrollToBottom();
+    requestAnimationFrame(() => term?.scrollToBottom());
+  }, 16);
+}
+
 function flushPending() {
   if (pendingWrites.length === 0) return;
   const batch = pendingWrites.splice(0);
-  batch.forEach(d => term?.write(d));
-  nextTick(() => term?.scrollToBottom());
+  let remaining = batch.length;
+  batch.forEach(d => term?.write(d, () => {
+    remaining -= 1;
+    if (remaining === 0) scrollToBottomSoon();
+  }));
 }
 
 // 对外暴露的 write：上划时缓存，否则直接写并锁底
@@ -173,10 +213,8 @@ function smartWrite(data) {
     const max = settings.scrollback || 5000;
     if (pendingWrites.length > max) pendingWrites.shift();
   } else {
-    term?.write(data);
-    // 锁底：写入后滚到最底
-    clearTimeout(scrollResumeTimer);
-    scrollResumeTimer = setTimeout(() => term?.scrollToBottom(), 16);
+    // xterm write is async; scroll after render so mobile Codex output stays pinned.
+    term?.write(data, scrollToBottomSoon);
   }
 }
 
@@ -211,14 +249,17 @@ onMounted(() => {
   const vpObserver = new MutationObserver(() => {
     const vp = term.element?.querySelector('.xterm-viewport');
     if (vp) {
-      vp.addEventListener('scroll', onViewportScroll, { passive: true });
+      bindViewport(vp);
       vpObserver.disconnect();
     }
   });
   vpObserver.observe(termRef.value, { childList: true, subtree: true });
   // 如果已经存在直接绑定
   const vp0 = termRef.value?.querySelector('.xterm-viewport');
-  if (vp0) vp0.addEventListener('scroll', onViewportScroll, { passive: true });
+  if (vp0) {
+    bindViewport(vp0);
+    vpObserver.disconnect();
+  }
 
   term.onData(data => {
     emit('input', data);
@@ -274,6 +315,7 @@ onMounted(() => {
         resizeTimer = setTimeout(() => {
           fitAddon.fit();
           emit('resize', { cols: term.cols, rows: term.rows });
+          if (!userScrolled) scrollToBottomSoon();
         }, 80);
       }
     }
@@ -284,6 +326,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   resizeObserver?.disconnect();
   clearTimeout(resizeTimer);
+  unbindViewport();
   termRef.value?.removeEventListener('contextmenu', onContextMenu);
   termRef.value?.removeEventListener('paste', onNativePaste);
   termRef.value?.removeEventListener('paste', onTerminalPaste);
@@ -291,7 +334,10 @@ onBeforeUnmount(() => {
 });
 
 function write(data) { smartWrite(data); }
-function fit() { fitAddon?.fit(); }
+function fit() {
+  fitAddon?.fit();
+  if (!userScrolled) scrollToBottomSoon();
+}
 function scrollToBottom() {
   userScrolled = false;
   flushPending();

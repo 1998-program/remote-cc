@@ -31,7 +31,7 @@ Claude Code / Codex 都是跑在终端里的 AI 编程助手，功能强大，�
 - **真实终端** — 颜色、交互、鼠标全支持，和直接在本机用没有区别
 - **实时多端同步** — 手机、平板、电脑同时接入同一个 Agent 会话
 - **持久会话** — 关闭浏览器或断开 SSH，Agent 在后台继续跑，随时 reconnect
-- **历史恢复** — 读取 `~/.claude/projects/` 或 `~/.codex/history.jsonl`，随时 resume 继续上次对话
+- **历史恢复** — 读取 Claude Code / Codex 历史，自动按工作目录恢复上次对话
 - **文件浏览器** — 在 Web 端直接浏览服务器上的文件，预览代码/图片，复制路径
 - **终端管理界面** — 在服务器上直接运行 `remotecc`，弹出可视化菜单管理所有会话
 - **多端断开快捷键** — `Ctrl+]` 随时脱离当前会话回菜单，不终止 Agent
@@ -104,7 +104,7 @@ bash install.sh
 
 安装脚本全程交互，自动检测环境，无需手动配置。
 
-RemoteCC 会自动检测 Claude Code 和 Codex，至少安装其中一个即可。新建会话时可以选择 Agent；历史恢复支持 `~/.claude/projects/` 和 `~/.codex/history.jsonl`。
+RemoteCC 会自动检测 Claude Code 和 Codex，至少安装其中一个即可。新建会话时可以选择 Agent；历史恢复支持 Claude Code 的 `~/.claude/projects/`，以及 Codex 的 `~/.codex/sessions/` 会话记录。
 
 如果 Codex 或 Claude Code 需要代理，可在安装向导中配置 `CODEX_PROXY` / `CLAUDE_PROXY`。代理只注入对应 Agent CLI，不作为 RemoteCC 全局代理；提示里的默认示例是 `http://127.0.0.1:7890`。
 
@@ -141,10 +141,16 @@ remotecc attach <名称>  # 直接进入指定名称的会话
 
 ## 更新日志
 
+### 2026-05-21
+
+- **Codex 历史恢复**：改为读取 `~/.codex/sessions/` 中的真实会话元数据，按工作目录分组，恢复时不再落到 `~`
+- **恢复界面**：Codex 历史自动展开并预加载会话，不再多出 `~/.codex/history.jsonl` 这一层
+- **移动端终端**：优化 xterm 异步写入后的锁底逻辑，减少 Codex 输出底部留白
+
 ### 2026-05-19
 
 - **Codex 支持**：新建会话可选择 Claude Code 或 Codex，活跃会话会显示 Agent 类型
-- **历史恢复**：支持从 `~/.claude/projects/` 和 `~/.codex/history.jsonl` 恢复历史对话
+- **历史恢复**：支持从 Claude Code / Codex 历史中恢复历史对话
 - **Agent 代理**：安装和更新流程支持 `CODEX_PROXY` / `CLAUDE_PROXY`，代理只注入对应 Agent CLI
 - **服务管理**：修复 `rcc-tui` 服务状态误判，端口占用时 `rcc-server` 会显示占用进程
 

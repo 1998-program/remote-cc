@@ -1,10 +1,12 @@
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const crypto = require('crypto');
 const { normalizeAgent } = require('./agent-config');
 
 const CLAUDE_PROJECTS_DIR = path.join(os.homedir(), '.claude', 'projects');
 const CODEX_HISTORY_FILE = path.join(os.homedir(), '.codex', 'history.jsonl');
+const CODEX_SESSIONS_DIR = path.join(os.homedir(), '.codex', 'sessions');
 
 function getProjects(agent = 'claude') {
   return normalizeAgent(agent) === 'codex' ? getCodexProjects() : getClaudeProjects();
@@ -132,35 +134,178 @@ function getCodexHistoryEntries() {
 }
 
 function getCodexProjects() {
-  const sessions = getCodexSessions('codex');
+  const sessions = buildCodexSessions();
   if (!sessions.length) return [];
-  return [{
-    id: 'codex',
-    displayPath: '~/.codex/history.jsonl',
-    sessionCount: sessions.length,
-    lastModified: sessions[0].lastModified,
-  }];
+
+  const byProject = new Map();
+  for (const session of sessions) {
+    const current = byProject.get(session.projectId) || {
+      id: session.projectId,
+      displayPath: session.cwd || '~',
+      sessionCount: 0,
+      lastModified: new Date(0).toISOString(),
+    };
+    current.sessionCount += 1;
+    if (new Date(session.lastModified) > new Date(current.lastModified)) {
+      current.lastModified = session.lastModified;
+    }
+    byProject.set(session.projectId, current);
+  }
+
+  return Array.from(byProject.values())
+    .sort((a, b) => new Date(b.lastModified) - new Date(a.lastModified));
 }
 
 function getCodexSessions(projectId) {
-  if (projectId !== 'codex') return [];
-  const byId = new Map();
+  const sessions = buildCodexSessions();
+  if (projectId === 'codex') return sessions;
+  return sessions.filter(session => session.projectId === projectId);
+}
+
+function buildCodexSessions() {
+  const byId = getCodexSessionsFromFiles();
   for (const item of getCodexHistoryEntries()) {
     const id = item.session_id;
+    const lastModified = item.ts ? new Date(item.ts * 1000).toISOString() : '';
     const current = byId.get(id) || {
       sessionId: id,
-      projectId: 'codex',
       lastModified: new Date(0).toISOString(),
       lastMessage: '',
       messageCount: 0,
       cwd: '',
     };
-    current.messageCount += 1;
+    current.historyCount = (current.historyCount || 0) + 1;
     if (item.text) current.lastMessage = String(item.text).slice(0, 100);
-    if (item.ts) current.lastModified = new Date(item.ts * 1000).toISOString();
+    if (lastModified && new Date(lastModified) > new Date(current.lastModified)) {
+      current.lastModified = lastModified;
+    }
     byId.set(id, current);
   }
-  return Array.from(byId.values()).sort((a, b) => new Date(b.lastModified) - new Date(a.lastModified));
+
+  return Array.from(byId.values())
+    .map(session => normalizeCodexSession(session))
+    .sort((a, b) => new Date(b.lastModified) - new Date(a.lastModified));
+}
+
+function getCodexSessionsFromFiles() {
+  const byId = new Map();
+  for (const filePath of listCodexSessionFiles()) {
+    const session = readCodexSessionFile(filePath);
+    if (!session || !session.sessionId) continue;
+    byId.set(session.sessionId, session);
+  }
+  return byId;
+}
+
+function listCodexSessionFiles() {
+  if (!fs.existsSync(CODEX_SESSIONS_DIR)) return [];
+  const files = [];
+  const stack = [CODEX_SESSIONS_DIR];
+  while (stack.length) {
+    const dir = stack.pop();
+    let entries = [];
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch (_) {
+      continue;
+    }
+    for (const entry of entries) {
+      const fullPath = path.join(dir, entry.name);
+      if (entry.isDirectory()) stack.push(fullPath);
+      else if (entry.isFile() && entry.name.endsWith('.jsonl')) files.push(fullPath);
+    }
+  }
+  return files;
+}
+
+function readCodexSessionFile(filePath) {
+  let stat;
+  try {
+    stat = fs.statSync(filePath);
+  } catch (_) {
+    return null;
+  }
+
+  const session = {
+    sessionId: '',
+    lastModified: stat.mtime.toISOString(),
+    lastMessage: '',
+    messageCount: 0,
+    cwd: '',
+  };
+
+  let content = '';
+  try {
+    content = fs.readFileSync(filePath, 'utf8');
+  } catch (_) {
+    return null;
+  }
+
+  for (const line of content.split('\n')) {
+    if (!line.trim()) continue;
+    let obj;
+    try {
+      obj = JSON.parse(line);
+    } catch (_) {
+      continue;
+    }
+
+    if (obj.timestamp && new Date(obj.timestamp) > new Date(session.lastModified)) {
+      session.lastModified = new Date(obj.timestamp).toISOString();
+    }
+
+    if (obj.type === 'session_meta' && obj.payload) {
+      if (!session.sessionId && obj.payload.id) session.sessionId = obj.payload.id;
+      if (!session.cwd && obj.payload.cwd) session.cwd = obj.payload.cwd;
+      if (obj.payload.timestamp && new Date(obj.payload.timestamp) > new Date(session.lastModified)) {
+        session.lastModified = new Date(obj.payload.timestamp).toISOString();
+      }
+    }
+
+    if (obj.type === 'turn_context' && obj.payload && !session.cwd && obj.payload.cwd) {
+      session.cwd = obj.payload.cwd;
+    }
+
+    if (obj.type === 'response_item' && obj.payload?.type === 'message') {
+      const role = obj.payload.role;
+      if (role === 'user' || role === 'assistant') session.messageCount += 1;
+      if (role === 'user') {
+        const text = extractCodexMessageText(obj.payload.content);
+        if (text && !isEnvironmentContext(text)) session.lastMessage = text.slice(0, 100);
+      }
+    }
+  }
+
+  return session;
+}
+
+function extractCodexMessageText(content) {
+  if (typeof content === 'string') return content;
+  if (!Array.isArray(content)) return '';
+  const textPart = content.find(part => part && (part.type === 'input_text' || part.type === 'output_text' || part.type === 'text'));
+  return textPart?.text || '';
+}
+
+function isEnvironmentContext(text) {
+  return String(text).trim().startsWith('<environment_context>');
+}
+
+function normalizeCodexSession(session) {
+  const cwd = session.cwd || '~';
+  const messageCount = session.messageCount || session.historyCount || 0;
+  return {
+    sessionId: session.sessionId,
+    projectId: codexProjectId(cwd),
+    lastModified: session.lastModified || new Date(0).toISOString(),
+    lastMessage: session.lastMessage || '',
+    messageCount,
+    cwd,
+  };
+}
+
+function codexProjectId(cwd) {
+  const hash = crypto.createHash('sha1').update(cwd || '~').digest('hex').slice(0, 16);
+  return `codex-${hash}`;
 }
 
 module.exports = { getProjects, getSessions, readSession };

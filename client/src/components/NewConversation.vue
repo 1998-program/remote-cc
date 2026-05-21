@@ -193,8 +193,10 @@ async function loadHistory() {
   histLoading.value = true;
   histError.value = '';
   try {
-    projects.value = await api.getProjects(agent.value);
+    const loadedProjects = await api.getProjects(agent.value);
+    projects.value = loadedProjects;
     histLoaded = true;
+    if (agent.value === 'codex') await preloadCodexSessions(loadedProjects);
   } catch (e) {
     histError.value = e.message;
   } finally {
@@ -205,6 +207,10 @@ async function loadHistory() {
 async function toggleProj(id) {
   if (expanded.has(id)) { expanded.delete(id); return; }
   expanded.add(id);
+  await ensureProjLoaded(id);
+}
+
+async function ensureProjLoaded(id) {
   if (projSessions[id]) return;
   loadingProj.add(id);
   try {
@@ -213,6 +219,29 @@ async function toggleProj(id) {
     projSessions[id] = [];
   } finally {
     loadingProj.delete(id);
+  }
+}
+
+async function preloadCodexSessions(projectList) {
+  if (!projectList.length) return;
+  for (const proj of projectList) {
+    expanded.add(proj.id);
+    loadingProj.add(proj.id);
+  }
+  try {
+    const sessions = await api.getSessions('codex', agent.value);
+    const byProject = Object.fromEntries(projectList.map(proj => [proj.id, []]));
+    for (const sess of sessions) {
+      if (!byProject[sess.projectId]) byProject[sess.projectId] = [];
+      byProject[sess.projectId].push(sess);
+    }
+    for (const [projectId, sessionsInProject] of Object.entries(byProject)) {
+      projSessions[projectId] = sessionsInProject;
+    }
+  } catch (_) {
+    for (const proj of projectList) projSessions[proj.id] = [];
+  } finally {
+    for (const proj of projectList) loadingProj.delete(proj.id);
   }
 }
 
