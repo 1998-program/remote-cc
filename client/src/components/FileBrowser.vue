@@ -283,18 +283,56 @@ async function loadPreview(entry) {
 
 // ── 复制路径 ──────────────────────────────────────────────────────────────────
 function fullPath(entry) {
-  return currentPath.value + '/' + entry.name;
+  if (!entry) return '';
+  const base = currentPath.value || '';
+  if (base === '/') return `/${entry.name}`;
+  return `${base.replace(/\/+$/, '')}/${entry.name}`;
 }
 
 let toastTimer = null;
 async function copyPath(entry) {
   const p = fullPath(entry);
-  try {
-    await navigator.clipboard.writeText(p);
-    showToast(p);
-  } catch (_) {
+  if (!p) {
     showToast('复制失败');
+    return;
   }
+  if (await copyText(p)) {
+    showToast(p);
+    return;
+  }
+  showToast('复制失败');
+}
+
+async function copyText(text) {
+  if (navigator.clipboard?.writeText && window.isSecureContext) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch (_) {}
+  }
+  return fallbackCopyText(text);
+}
+
+function fallbackCopyText(text) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.setAttribute('readonly', '');
+  ta.style.position = 'fixed';
+  ta.style.left = '-9999px';
+  ta.style.top = '0';
+  document.body.appendChild(ta);
+  ta.focus();
+  ta.select();
+  ta.setSelectionRange(0, ta.value.length);
+  let copied = false;
+  try {
+    copied = document.execCommand('copy');
+  } catch (_) {
+    copied = false;
+  } finally {
+    document.body.removeChild(ta);
+  }
+  return copied;
 }
 
 function showToast(msg) {
