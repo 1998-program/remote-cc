@@ -38,7 +38,7 @@ Agent PTY（持续运行）
 
 #### 新建对话
 
-- **New 标签**：选择 Claude Code 或 Codex，输入工作目录和会话名 → 启动
+- **New 标签**：选择 Claude Code 或 Codex，输入工作目录或点击目录按钮选择工作目录，填写会话名 → 启动
 - **Resume 标签**：从 Claude Code / Codex 历史中按工作目录选择对话 → 恢复
 - **代理**：安装时可配置 `CODEX_PROXY` / `CLAUDE_PROXY`；代理只用于 Agent CLI，不会作为 RemoteCC 全局代理。
 
@@ -57,19 +57,27 @@ Agent PTY（持续运行）
 - **SH 模式**（黄色，行首输入 `!` 自动切换）：两排 Linux 常用符号
 - `Ctrl+]` 在会话内断开回菜单
 
-#### 文件浏览器（右上角 ⊞）
+#### 文件浏览器（右上角文件夹图标）
 
-点击顶栏 ⊞ 图标打开文件浏览器，默认显示当前会话的工作目录：
+点击顶栏文件夹图标打开文件浏览器，默认显示服务器根目录 `/`：
 
 - **左栏**：目录浏览，双击进入子目录，支持隐藏文件显示
 - **右栏**：文件预览（文本/代码含行号、图片）
-- **复制路径**：鼠标悬停条目，点击 ⎘ 复制绝对路径；预览面板顶部也有复制按钮
+- **新建文件夹**：点击工具栏文件夹加号，在当前目录创建子目录
+- **复制路径**：鼠标悬停条目，点击复制路径按钮；预览面板顶部也有复制按钮
+- **上传 / 下载**：点击上传按钮或把文件拖到文件浏览器，可上传到当前目录；点击下载按钮下载文件
 
-#### 设置页（右上角 ⚙）
+#### 临时 Shell（右上角终端图标）
+
+终端按钮会打开一个不持久化的普通 shell PTY，适合短任务。关闭页面或浏览器后 shell 会退出。默认优先使用 `zsh`，其次 `fish`、`bash`、`sh`；可通过 `RCC_SHELL` 或 `REMOTECC_SHELL` 指定。需要保持时在 shell 内使用 `tmux`。
+
+#### 设置页（右上角设置图标）
 
 - **外观**：UI 风格（Cyberpunk/Minimal/Glass）+ 9 套颜色主题
 - **终端**：字体/字号/行高/光标/回滚行数/符号栏
 - **连接**：重连延迟
+- **远程控制**：文件浏览器默认目录、临时 Shell 默认目录、新建会话默认目录
+- **账户**：查看当前用户、修改 Web 登录密码、退出登录
 - **语言**：中文 / English
 
 ---
@@ -125,6 +133,28 @@ rcc-tui
 
 ---
 
+### 截图
+
+#### Web
+
+| 会话列表 | 终端 |
+|---|---|
+| <img src="assets/screenshots/web-home-desktop.png" alt="Web 会话列表" width="520"> | <img src="assets/screenshots/web-terminal-desktop.png" alt="Web 终端" width="520"> |
+
+#### 移动端
+
+| 会话列表 | 终端 | 输入法联动 | Shell 快捷键 |
+|---|---|---|---|
+| <img src="assets/screenshots/mobile-home.jpg" alt="移动端会话列表" width="220"> | <img src="assets/screenshots/mobile-terminal.jpg" alt="移动端终端" width="220"> | <img src="assets/screenshots/mobile-terminal-keyboard.jpg" alt="移动端输入法联动" width="220"> | <img src="assets/screenshots/mobile-shell-mode.jpg" alt="移动端 Shell 快捷键" width="220"> |
+
+#### TUI
+
+| 会话列表 | 会话操作 |
+|---|---|
+| <img src="assets/screenshots/tui-session-list.png" alt="TUI 会话列表" width="420"> | <img src="assets/screenshots/tui-session-actions.png" alt="TUI 会话操作" width="420"> |
+
+---
+
 ### URL 路由
 
 | URL | 说明 |
@@ -170,7 +200,7 @@ Open `http://<server>:8310` in a browser and log in.
 
 #### New Conversation
 
-- **New tab**: Choose Claude Code or Codex, enter working directory and session name → start
+- **New tab**: Choose Claude Code or Codex, enter a working directory or pick one from the directory picker, enter a session name → start
 - **Resume tab**: Browse Claude Code / Codex history grouped by working directory → resume
 - **Proxy**: Configure `CODEX_PROXY` / `CLAUDE_PROXY` during installation; proxy variables are scoped to the agent CLI and are not global RemoteCC proxy settings.
 
@@ -189,19 +219,27 @@ Open `http://<server>:8310` in a browser and log in.
 - **SH mode** (yellow, auto-switch when `!` is first char): two rows of Linux symbols
 - `Ctrl+]` detaches from session back to menu
 
-#### File Browser (⊞ top right)
+#### File Browser (folder icon, top right)
 
-Click the ⊞ icon to open the file browser, which defaults to the current session's working directory:
+Click the folder icon to open the file browser, which defaults to the server root directory `/`:
 
 - **Left panel**: directory listing, double-click to enter, toggle hidden files
 - **Right panel**: file preview (text/code with line numbers, images)
-- **Copy path**: hover over entry, click ⎘; also available in the preview header
+- **New folder**: click the folder-plus tool button to create a subdirectory in the current directory
+- **Copy path**: hover over an entry and click the copy path button; also available in the preview header
+- **Upload / download**: click the upload button or drop files onto the browser to upload into the current directory; click the download button to download files
 
-#### Settings (⚙ top right)
+#### Temporary Shell (terminal icon, top right)
+
+The terminal button opens a non-persistent shell PTY. It is useful for short terminal-only tasks; close the page or browser and the shell exits. It prefers `zsh`, then `fish`, `bash`, and `sh`; set `RCC_SHELL` or `REMOTECC_SHELL` to override it. Use `tmux` inside the shell when persistence is needed.
+
+#### Settings (settings icon, top right)
 
 - **Appearance**: UI style (Cyberpunk/Minimal/Glass) + 9 color themes
 - **Terminal**: font / size / line-height / cursor / scrollback / symbol bar
 - **Connection**: reconnect delays
+- **Remote control**: file browser default path, temporary shell cwd, new-session default directory
+- **Account**: current user, Web login password change, sign out
 - **Language**: 中文 / English
 
 ---
@@ -257,6 +295,28 @@ Displays a large-text banner and session list on launch. `rcc-tui` reads `~/.rcc
 
 ---
 
+### Screenshots
+
+#### Web
+
+| Sessions | Terminal |
+|---|---|
+| <img src="assets/screenshots/web-home-desktop.png" alt="Web sessions" width="520"> | <img src="assets/screenshots/web-terminal-desktop.png" alt="Web terminal" width="520"> |
+
+#### Mobile
+
+| Sessions | Terminal | Keyboard input | Shell shortcuts |
+|---|---|---|---|
+| <img src="assets/screenshots/mobile-home.jpg" alt="Mobile sessions" width="220"> | <img src="assets/screenshots/mobile-terminal.jpg" alt="Mobile terminal" width="220"> | <img src="assets/screenshots/mobile-terminal-keyboard.jpg" alt="Mobile keyboard input" width="220"> | <img src="assets/screenshots/mobile-shell-mode.jpg" alt="Mobile shell shortcuts" width="220"> |
+
+#### TUI
+
+| Session list | Session actions |
+|---|---|
+| <img src="assets/screenshots/tui-session-list.png" alt="TUI session list" width="420"> | <img src="assets/screenshots/tui-session-actions.png" alt="TUI session actions" width="420"> |
+
+---
+
 ### URL Routes
 
 | URL | Description |
@@ -269,6 +329,20 @@ Displays a large-text banner and session list on launch. `rcc-tui` reads `~/.rcc
 ---
 
 ## 更新记录 / Changelog
+
+### 2026-06-03
+
+**TUI 断开修复**：修复 `rcc-tui` 新建会话后第一次 `Ctrl+]` 无法正常回菜单的问题。
+
+**新建任务目录选择**：Web 新建会话支持通过目录选择器挑选工作目录。
+
+**文件浏览器**：默认从 `/` 打开，支持新建文件夹、点击/拖拽上传到当前目录和下载文件。
+
+**临时 Shell**：Web 顶栏新增通用终端入口，提供不持久化的普通 shell 终端；需要保持时建议使用 `tmux`。
+
+**统一图标**：Web 顶栏、文件管理器、设置页和操作按钮改为统一 CSS 线框图标。
+
+**设置增强**：设置页支持默认目录配置和 Web 登录密码修改。
 
 ### 2026-05-21
 

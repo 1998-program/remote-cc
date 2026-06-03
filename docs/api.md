@@ -23,6 +23,17 @@ curl -H "Authorization: Bearer <token>" http://localhost:8310/api/active-session
 
 Token 有效期 30 天，存储在客户端 `localStorage`。
 
+修改 Web 登录密码：
+
+```bash
+curl -X POST http://localhost:8310/api/change-password \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"currentPassword":"oldpassword","newPassword":"newpassword123"}'
+```
+
+密码会以 scrypt 哈希保存到 `~/.rcc/auth.json`。修改成功后现有 Web Token 失效，需要重新登录；本地 `~/.rcc/local.token` 不受影响。
+
 ---
 
 ### REST API
@@ -88,7 +99,7 @@ GET /api/fs/list?path=~&hidden=false
 响应：`{ path, entries: [{ name, type, size, mtime, ext }] }`
 
 - `type`：`"dir"` | `"file"`
-- 白名单路径：`~`、`/tmp`、`/paddle`（可通过 `FS_ROOTS` 扩展）
+- 白名单路径：默认 `/`（可通过 `FS_ROOTS` 扩展）
 
 ```
 GET /api/fs/read?path=/path/to/file&maxBytes=102400
@@ -105,6 +116,26 @@ GET /api/fs/stat?path=/path/to/file
 
 响应：`{ path, name, type, size, mtime, mode }`
 
+```
+POST /api/fs/mkdir
+```
+
+请求：`{ "path": "/target/dir", "name": "new-folder" }`
+响应：`{ path, name, type: "dir", size, mtime, mode }`
+
+```
+POST /api/fs/upload?path=/target/dir
+```
+
+请求：`application/octet-stream`，文件名放在 `X-Filename` header。
+响应：`{ path, name, type, size, mtime, mode }`
+
+```
+GET /api/fs/download?path=/path/to/file
+```
+
+响应：二进制文件流。
+
 ---
 
 ### WebSocket API
@@ -120,6 +151,10 @@ GET /api/fs/stat?path=/path/to/file
 | `start` | 创建新会话 | `workingDir`, `name`, `resumeSessionId?`, `cols`, `rows` |
 | `attach` | 接入已有会话 | `sessionId` |
 | `resize` | 调整终端尺寸 | `cols`, `rows` |
+| `shell_start` | 创建不持久化临时 shell | `cwd`, `cols`, `rows` |
+| `shell_input` | 写入临时 shell stdin | `data` |
+| `shell_resize` | 调整临时 shell 尺寸 | `cols`, `rows` |
+| `shell_kill` | 关闭临时 shell | — |
 | `kill` | 终止会话 | `sessionId` |
 | `delete` | 删除会话记录 | `sessionId` |
 | `rename` | 重命名会话 | `sessionId`, `name` |
@@ -135,6 +170,9 @@ GET /api/fs/stat?path=/path/to/file
 | `replay_start` / `replay_end` | Scrollback 回放边界 |
 | `exit` | PTY 进程退出，含 `exitCode` |
 | `error` | 错误信息 |
+| `shell_ready` | 临时 shell 创建完成，含 `cwd` |
+| `shell_exit` | 临时 shell 已退出，含 `exitCode` |
+| `shell_error` | 临时 shell 错误信息 |
 
 ---
 
@@ -172,6 +210,17 @@ curl -H "Authorization: Bearer <token>" http://localhost:8310/api/active-session
 ```
 
 Tokens are valid for 30 days and stored in the client's `localStorage`.
+
+Change the Web login password:
+
+```bash
+curl -X POST http://localhost:8310/api/change-password \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"currentPassword":"oldpassword","newPassword":"newpassword123"}'
+```
+
+The password is stored as a scrypt hash in `~/.rcc/auth.json`. After a successful change, existing Web tokens are invalidated and the browser must sign in again; the local `~/.rcc/local.token` is unaffected.
 
 ---
 
@@ -238,7 +287,7 @@ GET /api/fs/list?path=~&hidden=false
 Response: `{ path, entries: [{ name, type, size, mtime, ext }] }`
 
 - `type`: `"dir"` | `"file"`
-- Whitelist roots: `~`, `/tmp`, `/paddle` (extendable via `FS_ROOTS`)
+- Whitelist roots: `/` by default (extendable via `FS_ROOTS`)
 
 ```
 GET /api/fs/read?path=/path/to/file&maxBytes=102400
@@ -255,6 +304,26 @@ GET /api/fs/stat?path=/path/to/file
 
 Response: `{ path, name, type, size, mtime, mode }`
 
+```
+POST /api/fs/mkdir
+```
+
+Request: `{ "path": "/target/dir", "name": "new-folder" }`
+Response: `{ path, name, type: "dir", size, mtime, mode }`
+
+```
+POST /api/fs/upload?path=/target/dir
+```
+
+Request: `application/octet-stream`, with the filename in the `X-Filename` header.
+Response: `{ path, name, type, size, mtime, mode }`
+
+```
+GET /api/fs/download?path=/path/to/file
+```
+
+Response: binary file stream.
+
 ---
 
 ### WebSocket API
@@ -270,6 +339,10 @@ On connect, the server immediately sends: `{"type":"session_list","sessions":[..
 | `start` | Create new session | `workingDir`, `name`, `resumeSessionId?`, `cols`, `rows` |
 | `attach` | Attach to existing session | `sessionId` |
 | `resize` | Resize terminal | `cols`, `rows` |
+| `shell_start` | Create a non-persistent temporary shell | `cwd`, `cols`, `rows` |
+| `shell_input` | Write to temporary shell stdin | `data` |
+| `shell_resize` | Resize temporary shell | `cols`, `rows` |
+| `shell_kill` | Close temporary shell | — |
 | `kill` | Kill session PTY | `sessionId` |
 | `delete` | Delete session record | `sessionId` |
 | `rename` | Rename session | `sessionId`, `name` |
@@ -285,6 +358,9 @@ On connect, the server immediately sends: `{"type":"session_list","sessions":[..
 | `replay_start` / `replay_end` | Scrollback replay boundaries |
 | `exit` | PTY process exited, includes `exitCode` |
 | `error` | Error message |
+| `shell_ready` | Temporary shell is ready, includes `cwd` |
+| `shell_exit` | Temporary shell exited, includes `exitCode` |
+| `shell_error` | Temporary shell error message |
 
 ---
 

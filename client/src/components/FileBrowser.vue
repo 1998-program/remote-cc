@@ -1,5 +1,12 @@
 <template>
-  <div class="fb-root">
+  <div
+    class="fb-root"
+    :class="{ 'fb-drag-over': dragOver }"
+    @dragenter.prevent="dragOver = true"
+    @dragover.prevent="dragOver = true"
+    @dragleave="dragOver = false"
+    @drop.prevent="onDropUpload"
+  >
 
     <!-- ── 工具栏 ──────────────────────────────────────────────── -->
     <div class="fb-toolbar">
@@ -25,7 +32,35 @@
         <span>隐藏文件</span>
       </label>
 
-      <button class="fb-close-btn" @click="$emit('close')" title="关闭">✕</button>
+      <button class="fb-tool-btn" :class="{ active: mkdirOpen }" title="新建文件夹" @click="openMkdirForm">
+        <AppIcon name="folder-plus" />
+      </button>
+
+      <button class="fb-tool-btn fb-upload-btn" :class="{ active: uploading }" title="上传到当前目录" @click="openUploadPicker">
+        <AppIcon v-if="uploading" name="spinner" spin />
+        <AppIcon v-else name="upload" />
+        <span class="fb-tool-label">上传</span>
+      </button>
+      <input ref="uploadInput" type="file" multiple class="fb-file-input" @change="onUploadSelect" />
+
+      <button class="fb-close-btn" @click="$emit('close')" title="关闭"><AppIcon name="close" /></button>
+
+      <form v-if="mkdirOpen" class="fb-mkdir-form" @submit.prevent="createFolder">
+        <input
+          ref="mkdirInput"
+          v-model="mkdirName"
+          class="fb-mkdir-input"
+          placeholder="新建文件夹"
+          spellcheck="false"
+          @keyup.esc="cancelMkdir"
+        />
+        <button class="fb-mkdir-action primary" :disabled="creatingDir || !mkdirName.trim()" title="创建" type="submit">
+          <AppIcon name="check" />
+        </button>
+        <button class="fb-mkdir-action" title="取消" type="button" @click="cancelMkdir">
+          <AppIcon name="close" />
+        </button>
+      </form>
     </div>
 
     <!-- ── 主体 ─────────────────────────────────────────────────── -->
@@ -39,7 +74,7 @@
         <div v-else class="fb-entries">
           <!-- 向上一级 -->
           <div v-if="parentPath" class="fb-entry fb-dir" @click="navigateTo(parentPath)">
-            <span class="fb-icon fb-icon-dir">↩</span>
+            <span class="fb-icon fb-icon-dir"><AppIcon name="parent" /></span>
             <span class="fb-name">..</span>
           </div>
           <!-- 条目 -->
@@ -52,12 +87,17 @@
             @dblclick="onDblClick(entry)"
           >
             <span class="fb-icon" :class="entry.type === 'dir' ? 'fb-icon-dir' : 'fb-icon-file'">
-              {{ entry.type === 'dir' ? '▸' : fileIcon(entry.ext) }}
+              <AppIcon :name="entry.type === 'dir' ? 'folder' : fileIconName(entry.ext)" />
             </span>
             <span class="fb-name" :title="entry.name">{{ entry.name }}</span>
             <span class="fb-meta">
               <span v-if="entry.type === 'file'" class="fb-size">{{ fmtSize(entry.size) }}</span>
-              <button class="fb-copy-btn" title="复制路径" @click.stop="copyPath(entry)">⎘</button>
+              <button v-if="entry.type === 'file'" class="fb-copy-btn" title="下载文件" @click.stop="downloadEntry(entry)">
+                <AppIcon name="download" />
+              </button>
+              <button class="fb-copy-btn" title="复制路径" @click.stop="copyPath(entry)">
+                <AppIcon name="copy" />
+              </button>
             </span>
           </div>
         </div>
@@ -66,7 +106,7 @@
       <!-- 预览面板 -->
       <div class="fb-preview-panel">
         <div v-if="!preview.show" class="fb-preview-empty">
-          <div class="fb-preview-empty-icon">⊞</div>
+          <AppIcon name="empty" class="fb-preview-empty-icon" />
           <div>点击文件预览，双击全屏查看</div>
         </div>
         <template v-else>
@@ -75,8 +115,15 @@
             <span class="fb-preview-ext" v-if="selectedEntry?.ext">{{ selectedEntry.ext }}</span>
             <span class="fb-preview-size">{{ fmtSize(preview.size) }}</span>
             <span v-if="preview.truncated" class="fb-preview-truncated">已截断</span>
-            <button class="fb-preview-fullscreen" title="全屏查看" @click="fullscreen = true">⛶</button>
-            <button class="fb-preview-copy" title="复制文件路径" @click="copyPath(selectedEntry)">⎘ 复制路径</button>
+            <button class="fb-preview-fullscreen" title="全屏查看" @click="fullscreen = true">
+              <AppIcon name="fullscreen" />
+            </button>
+            <button class="fb-preview-copy" title="下载文件" @click="downloadEntry(selectedEntry)">
+              <AppIcon name="download" /> 下载
+            </button>
+            <button class="fb-preview-copy" title="复制文件路径" @click="copyPath(selectedEntry)">
+              <AppIcon name="copy" /> 复制路径
+            </button>
           </div>
           <div v-if="preview.loading" class="fb-preview-loading">加载中…</div>
           <div v-else-if="preview.type === 'text'" class="fb-preview-code">
@@ -91,13 +138,14 @@
             <img :src="preview.dataUrl" :alt="selectedEntry?.name" />
           </div>
           <div v-else class="fb-preview-unsupported">
-            <div class="fb-unsupported-icon">{{ fileIcon(selectedEntry?.ext) }}</div>
+            <AppIcon :name="fileIconName(selectedEntry?.ext)" class="fb-unsupported-icon" />
             <div class="fb-unsupported-name">{{ selectedEntry?.name }}</div>
             <div class="fb-unsupported-info">
               <span v-if="preview.type === 'image_too_large'">图片过大（{{ fmtSize(preview.size) }}）</span>
               <span v-else>{{ fmtSize(preview.size) }} · 二进制文件</span>
             </div>
-            <button class="fb-copy-path-btn" @click="copyPath(selectedEntry)">⎘ 复制路径</button>
+            <button class="fb-copy-path-btn" @click="copyPath(selectedEntry)"><AppIcon name="copy" /> 复制路径</button>
+            <button class="fb-copy-path-btn" @click="downloadEntry(selectedEntry)"><AppIcon name="download" /> 下载</button>
           </div>
         </template>
       </div>
@@ -107,6 +155,10 @@
     <transition name="fb-toast-fade">
       <div v-if="copyToast" class="fb-toast">{{ copyToast }}</div>
     </transition>
+    <div v-if="dragOver" class="fb-drag-overlay">
+      <AppIcon name="upload" />
+      <span>拖放文件上传到 {{ currentPath || '/' }}</span>
+    </div>
 
     <!-- ── 全屏预览 ─────────────────────────────────────────────── -->
     <Teleport to="body">
@@ -118,8 +170,9 @@
             <span class="fb-preview-ext" v-if="selectedEntry?.ext">{{ selectedEntry.ext }}</span>
             <span class="fb-preview-size">{{ fmtSize(preview.size) }}</span>
             <span v-if="preview.truncated" class="fb-preview-truncated">已截断</span>
-            <button class="fb-preview-copy" @click="copyPath(selectedEntry)">⎘ 复制路径</button>
-            <button class="fb-fs-close" @click="fullscreen = false" title="关闭全屏">✕</button>
+            <button class="fb-preview-copy" @click="downloadEntry(selectedEntry)"><AppIcon name="download" /> 下载</button>
+            <button class="fb-preview-copy" @click="copyPath(selectedEntry)"><AppIcon name="copy" /> 复制路径</button>
+            <button class="fb-fs-close" @click="fullscreen = false" title="关闭全屏"><AppIcon name="close" /></button>
           </div>
           <!-- 全屏内容（复用同一份 preview 数据，无需重新请求） -->
           <div v-if="preview.loading" class="fb-preview-loading">加载中…</div>
@@ -135,7 +188,7 @@
             <img :src="preview.dataUrl" :alt="selectedEntry?.name" />
           </div>
           <div v-else class="fb-preview-unsupported fb-fs-content">
-            <div class="fb-unsupported-icon">{{ fileIcon(selectedEntry?.ext) }}</div>
+            <AppIcon :name="fileIconName(selectedEntry?.ext)" class="fb-unsupported-icon" />
             <div class="fb-unsupported-name">{{ selectedEntry?.name }}</div>
             <div class="fb-unsupported-info">
               <span v-if="preview.type === 'image_too_large'">图片过大（{{ fmtSize(preview.size) }}）</span>
@@ -149,8 +202,9 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, watch, onMounted, onBeforeUnmount } from 'vue';
+import { ref, reactive, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue';
 import { api } from '../api/index.js';
+import AppIcon from './AppIcon.vue';
 
 const props = defineProps({
   initialPath: { type: String, default: '' },
@@ -167,6 +221,13 @@ const error         = ref('');
 const pathInput     = ref('');
 const copyToast     = ref('');
 const fullscreen    = ref(false);
+const uploading     = ref(false);
+const uploadInput   = ref(null);
+const dragOver      = ref(false);
+const mkdirOpen     = ref(false);
+const mkdirName     = ref('');
+const mkdirInput    = ref(null);
+const creatingDir   = ref(false);
 
 const preview = reactive({
   show:      false,
@@ -219,7 +280,7 @@ async function loadDir(reqPath) {
   preview.show  = false;
   fullscreen.value = false;
   try {
-    const res = await api.fs.list(reqPath || '~', showHidden.value);
+    const res = await api.fs.list(reqPath || '/', showHidden.value);
     currentPath.value = res.path;
     pathInput.value   = res.path;
     entries.value     = res.entries;
@@ -243,7 +304,7 @@ function selectEntry(entry) {
 
 function onDblClick(entry) {
   if (entry.type === 'dir') {
-    navigateTo(currentPath.value + '/' + entry.name);
+    navigateTo(fullPath(entry));
   } else {
     // 文件双击：已有预览则直接全屏，否则先加载再全屏
     if (preview.show && selectedEntry.value?.name === entry.name && !preview.loading) {
@@ -259,7 +320,7 @@ function onDblClick(entry) {
 }
 
 async function loadPreview(entry) {
-  const fp = currentPath.value + '/' + entry.name;
+  const fp = fullPath(entry);
   preview.show    = true;
   preview.loading = true;
   preview.content = '';
@@ -335,6 +396,90 @@ function fallbackCopyText(text) {
   return copied;
 }
 
+function openUploadPicker() {
+  uploadInput.value?.click();
+}
+
+function openMkdirForm() {
+  mkdirOpen.value = true;
+  if (!mkdirName.value.trim()) mkdirName.value = 'new-folder';
+  nextTick(() => {
+    mkdirInput.value?.focus();
+    mkdirInput.value?.select();
+  });
+}
+
+function cancelMkdir() {
+  mkdirOpen.value = false;
+  mkdirName.value = '';
+}
+
+async function createFolder() {
+  const name = mkdirName.value.trim();
+  if (!name || creatingDir.value) return;
+  creatingDir.value = true;
+  try {
+    const created = await api.fs.mkdir(currentPath.value || '/', name);
+    cancelMkdir();
+    await loadDir(currentPath.value || '/');
+    const entry = entries.value.find(item => item.type === 'dir' && item.name === created.name);
+    if (entry) selectEntry(entry);
+    showToast(`已新建文件夹: ${created.name}`);
+  } catch (err) {
+    showToast(`新建失败: ${err.message || err}`);
+  } finally {
+    creatingDir.value = false;
+  }
+}
+
+async function onUploadSelect(e) {
+  const files = Array.from(e.target.files || []);
+  e.target.value = '';
+  await uploadFiles(files);
+}
+
+async function onDropUpload(e) {
+  dragOver.value = false;
+  const files = Array.from(e.dataTransfer?.files || []);
+  await uploadFiles(files);
+}
+
+async function uploadFiles(files) {
+  if (!files.length) return;
+  uploading.value = true;
+  try {
+    for (const file of files) await api.fs.upload(currentPath.value || '/', file);
+    showToast(`已上传 ${files.length} 个文件`);
+    await loadDir(currentPath.value || '/');
+  } catch (err) {
+    showToast(`上传失败: ${err.message || err}`);
+  } finally {
+    uploading.value = false;
+  }
+}
+
+async function downloadEntry(entry) {
+  const p = fullPath(entry);
+  if (!entry || entry.type !== 'file' || !p) {
+    showToast('下载失败');
+    return;
+  }
+  try {
+    const { blob, filename } = await api.fs.download(p);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename || entry.name;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast(`下载: ${entry.name}`);
+  } catch (err) {
+    showToast(`下载失败: ${err.message || err}`);
+  }
+}
+
 function showToast(msg) {
   copyToast.value = msg;
   clearTimeout(toastTimer);
@@ -349,22 +494,12 @@ function fmtSize(bytes) {
   return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
 }
 
-const EXT_ICON = {
-  '.md': '≡', '.txt': '≡', '.log': '≡', '.csv': '≡',
-  '.js': 'JS', '.ts': 'TS', '.jsx': 'JS', '.tsx': 'TS',
-  '.py': 'Py', '.rb': 'rb', '.go': 'Go', '.rs': 'Rs',
-  '.vue': '⬡', '.html': '≷', '.css': '~', '.scss': '~',
-  '.json': '{}', '.yaml': '{}', '.yml': '{}', '.toml': '{}',
-  '.sh': '$', '.bash': '$', '.zsh': '$',
-  '.png': '▣', '.jpg': '▣', '.jpeg': '▣', '.gif': '▣',
-  '.svg': '▣', '.webp': '▣',
-  '.pdf': '≡',
-};
-function fileIcon(ext) {
-  return EXT_ICON[(ext || '').toLowerCase()] || '·';
+const IMAGE_EXTS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.bmp', '.ico']);
+function fileIconName(ext) {
+  return IMAGE_EXTS.has((ext || '').toLowerCase()) ? 'image' : 'file';
 }
 
-onMounted(() => loadDir(props.initialPath || '~'));
+onMounted(() => loadDir(props.initialPath || '/'));
 
 watch(() => props.initialPath, (newPath) => {
   if (newPath && newPath !== currentPath.value) loadDir(newPath);
@@ -377,6 +512,9 @@ watch(() => props.initialPath, (newPath) => {
   height: 100%; background: var(--bg); color: var(--text);
   font-family: 'JetBrains Mono', monospace; font-size: 13px;
   position: relative; overflow: hidden;
+}
+.fb-root.fb-drag-over .fb-body {
+  filter: brightness(0.86);
 }
 
 /* ── 工具栏 ─────────────────────────────────────── */
@@ -416,10 +554,67 @@ watch(() => props.initialPath, (newPath) => {
 }
 .fb-hidden-toggle input { accent-color: var(--neon); }
 
+.fb-tool-btn {
+  background: none; border: 1px solid var(--border); border-radius: 4px;
+  color: var(--muted); font-size: 13px; width: 28px; height: 26px;
+  cursor: pointer; transition: color .12s, border-color .12s, background .12s;
+  flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+}
+.fb-tool-btn:hover,
+.fb-tool-btn.active {
+  color: var(--neon); border-color: var(--neon);
+  background: color-mix(in srgb, var(--neon) 8%, transparent);
+}
+.fb-upload-btn {
+  width: auto;
+  min-width: 58px;
+  padding: 0 8px;
+}
+.fb-tool-label {
+  font-size: 11px;
+  line-height: 1;
+}
+.fb-file-input { display: none; }
+
+.fb-mkdir-form {
+  display: flex; align-items: center; gap: 5px;
+  flex-basis: 100%;
+  min-width: 0;
+  padding-top: 2px;
+}
+.fb-mkdir-input {
+  flex: 1; min-width: 140px;
+  background: var(--bg3); color: var(--text);
+  border: 1px solid color-mix(in srgb, var(--neon) 30%, transparent);
+  border-radius: 5px;
+  font-family: inherit; font-size: 12px;
+  padding: 5px 8px; outline: none;
+}
+.fb-mkdir-input:focus { border-color: var(--neon); }
+.fb-mkdir-action {
+  width: 28px; height: 26px; flex-shrink: 0;
+  background: none; border: 1px solid var(--border); border-radius: 4px;
+  color: var(--muted); cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  transition: color .12s, border-color .12s, background .12s, opacity .12s;
+}
+.fb-mkdir-action.primary {
+  color: var(--neon);
+  border-color: color-mix(in srgb, var(--neon) 45%, transparent);
+}
+.fb-mkdir-action:hover:not(:disabled) {
+  color: var(--neon);
+  border-color: var(--neon);
+  background: color-mix(in srgb, var(--neon) 8%, transparent);
+}
+.fb-mkdir-action:disabled { opacity: .45; cursor: not-allowed; }
+
 .fb-close-btn {
   background: none; border: none; cursor: pointer;
-  color: var(--muted); font-size: 13px; padding: 3px 7px;
+  color: var(--muted); font-size: 14px; padding: 3px 7px;
   border-radius: 4px; flex-shrink: 0; transition: color .15s, background .15s;
+  display: inline-flex; align-items: center; justify-content: center;
 }
 .fb-close-btn:hover { color: #f38ba8; background: color-mix(in srgb, #f38ba8 10%, transparent); }
 
@@ -445,8 +640,11 @@ watch(() => props.initialPath, (newPath) => {
 .fb-entry:hover { background: color-mix(in srgb, var(--neon) 7%, transparent); }
 .fb-entry.fb-selected { background: color-mix(in srgb, var(--neon) 14%, transparent); }
 
-.fb-icon { width: 16px; text-align: center; flex-shrink: 0; font-size: 10px; }
-.fb-icon-dir { color: var(--neon); font-size: 12px; }
+.fb-icon {
+  width: 18px; text-align: center; flex-shrink: 0; font-size: 16px;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.fb-icon-dir { color: var(--neon); }
 .fb-icon-file { color: var(--muted); }
 
 .fb-name {
@@ -463,7 +661,9 @@ watch(() => props.initialPath, (newPath) => {
 
 .fb-copy-btn {
   background: none; border: 1px solid var(--border); border-radius: 3px;
-  color: var(--muted); font-size: 10px; padding: 0 4px; line-height: 16px;
+  color: var(--muted); font-size: 13px; padding: 0; line-height: 16px;
+  width: 22px; height: 20px;
+  display: inline-flex; align-items: center; justify-content: center;
   cursor: pointer; transition: color .1s, border-color .1s;
 }
 .fb-copy-btn:hover { color: var(--neon); border-color: var(--neon); }
@@ -479,7 +679,7 @@ watch(() => props.initialPath, (newPath) => {
   align-items: center; justify-content: center;
   gap: 10px; color: var(--muted); font-size: 12px;
 }
-.fb-preview-empty-icon { font-size: 28px; opacity: .3; }
+.fb-preview-empty-icon { font-size: 32px; opacity: .3; }
 
 .fb-preview-header {
   display: flex; align-items: center; gap: 8px;
@@ -500,16 +700,19 @@ watch(() => props.initialPath, (newPath) => {
   padding: 1px 5px; border-radius: 3px;
 }
 .fb-preview-fullscreen {
+  margin-left: auto;
   background: none; border: 1px solid var(--border); border-radius: 4px;
-  color: var(--muted); font-size: 12px; padding: 1px 6px; cursor: pointer;
+  color: var(--muted); font-size: 14px; padding: 2px 6px; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
   transition: color .12s, border-color .12s;
 }
 .fb-preview-fullscreen:hover { color: var(--neon); border-color: var(--neon); }
 .fb-preview-copy {
-  margin-left: auto;
+  margin-left: 0;
   background: none; border: 1px solid var(--border); border-radius: 4px;
   color: var(--muted); font-size: 11px; padding: 2px 8px; cursor: pointer;
   font-family: inherit; transition: color .12s, border-color .12s; white-space: nowrap;
+  display: inline-flex; align-items: center; gap: 5px;
 }
 .fb-preview-copy:hover { color: var(--neon); border-color: var(--neon); }
 
@@ -554,7 +757,7 @@ watch(() => props.initialPath, (newPath) => {
   align-items: center; justify-content: center;
   gap: 8px; color: var(--muted);
 }
-.fb-unsupported-icon { font-size: 32px; opacity: .3; }
+.fb-unsupported-icon { font-size: 34px; opacity: .3; }
 .fb-unsupported-name { color: var(--text); font-size: 13px; }
 .fb-unsupported-info { font-size: 11px; }
 .fb-copy-path-btn {
@@ -562,6 +765,7 @@ watch(() => props.initialPath, (newPath) => {
   background: none; border: 1px solid var(--border); border-radius: 5px;
   color: var(--muted); font-size: 12px; padding: 5px 14px; cursor: pointer;
   font-family: inherit; transition: color .12s, border-color .12s;
+  display: inline-flex; align-items: center; gap: 6px;
 }
 .fb-copy-path-btn:hover { color: var(--neon); border-color: var(--neon); }
 
@@ -586,6 +790,7 @@ watch(() => props.initialPath, (newPath) => {
   background: none; border: none; cursor: pointer;
   color: var(--muted); font-size: 16px; padding: 2px 8px;
   border-radius: 4px; transition: color .15s, background .15s;
+  display: inline-flex; align-items: center; justify-content: center;
 }
 .fb-fs-close:hover { color: #f38ba8; background: color-mix(in srgb, #f38ba8 10%, transparent); }
 .fb-fs-content { flex: 1; min-height: 0; }
@@ -603,4 +808,21 @@ watch(() => props.initialPath, (newPath) => {
 .fb-toast-fade-leave-active { transition: opacity .2s, transform .2s; }
 .fb-toast-fade-enter-from  { opacity: 0; transform: translateX(-50%) translateY(8px); }
 .fb-toast-fade-leave-to    { opacity: 0; transform: translateX(-50%) translateY(8px); }
+
+.fb-drag-overlay {
+  position: absolute; inset: 48px 18px 18px;
+  z-index: 20;
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  border: 1px dashed color-mix(in srgb, var(--neon) 70%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--bg2) 82%, transparent);
+  color: var(--neon);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  pointer-events: none;
+  box-shadow: 0 0 24px var(--glow);
+}
+.fb-drag-overlay .app-icon {
+  font-size: 22px;
+}
 </style>

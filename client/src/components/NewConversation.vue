@@ -24,16 +24,27 @@
 
       <div class="nc-field">
         <label class="nc-label">{{ t.work_dir }}</label>
-        <input
-          v-model="workingDir"
-          class="nc-input"
-          placeholder="~/"
-          spellcheck="false" autocorrect="off" autocapitalize="off"
-          @keyup.enter="start"
-        />
+        <div class="nc-dir-row">
+          <input
+            v-model="workingDir"
+            class="nc-input"
+            placeholder="~/"
+            spellcheck="false" autocorrect="off" autocapitalize="off"
+            @keyup.enter="start"
+          />
+          <button class="nc-browse-btn" :class="{ active: dirPickerOpen }" title="选择目录" @click="toggleDirPicker">
+            <AppIcon name="folder" />
+          </button>
+        </div>
         <div class="nc-quickpicks">
           <button v-for="p in quickPicks" :key="p" class="nc-pick" @click="workingDir = p">{{ shortPath(p) }}</button>
         </div>
+        <DirectoryPicker
+          v-if="dirPickerOpen"
+          :initialPath="dirPickerStart"
+          @select="selectWorkingDir"
+          @cancel="dirPickerOpen = false"
+        />
       </div>
 
       <div class="nc-field">
@@ -49,7 +60,7 @@
 
       <div class="nc-actions">
         <button class="nc-cancel" @click="$emit('cancel')">{{ t.cancel }}</button>
-        <button class="nc-start" @click="start">{{ t.start_btn }}</button>
+        <button class="nc-start" @click="start">{{ t.start_btn }} <AppIcon name="play" /></button>
       </div>
     </div>
 
@@ -81,7 +92,7 @@
           <div class="nc-proj-hdr" @click="toggleProj(proj.id)">
             <span class="nc-proj-path">{{ proj.displayPath || proj.id }}</span>
             <span class="nc-proj-count">{{ proj.sessionCount }}</span>
-            <span class="nc-chevron" :class="{ open: expanded.has(proj.id) }">›</span>
+            <AppIcon name="chevron" class="nc-chevron" :class="{ open: expanded.has(proj.id) }" />
           </div>
 
           <!-- Sessions list -->
@@ -110,7 +121,7 @@
                   @keyup.enter="startResume"
                   @click.stop
                 />
-                <button class="nc-start nc-start-sm" @click.stop="startResume">{{ t.resume }} ▶</button>
+                <button class="nc-start nc-start-sm" @click.stop="startResume">{{ t.resume }} <AppIcon name="play" /></button>
               </div>
             </div>
           </template>
@@ -125,9 +136,12 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed } from 'vue';
+import { ref, reactive, computed, watch } from 'vue';
 import { api } from '../api/index.js';
 import { useI18n } from '../i18n.js';
+import { settings } from '../settings.js';
+import DirectoryPicker from './DirectoryPicker.vue';
+import AppIcon from './AppIcon.vue';
 
 const { t } = useI18n();
 const emit = defineEmits(['start', 'cancel']);
@@ -141,9 +155,19 @@ const agent = ref('claude');
 const tab = ref('new');
 
 // ── New conversation ───────────────────────────────────────────────────────────
-const workingDir  = ref('~');
+let lastDefaultDir = settings.newConversationDefaultDir || '~';
+const workingDir  = ref(lastDefaultDir);
 const sessionName = ref('');
-const quickPicks  = ['~', '/tmp'];
+const dirPickerOpen = ref(false);
+const quickPicks  = computed(() => {
+  const picks = [settings.newConversationDefaultDir || '~', '/', '~', '/tmp', '/paddle'];
+  return [...new Set(picks.filter(Boolean))];
+});
+
+const dirPickerStart = computed(() => {
+  const dir = workingDir.value.trim();
+  return dir || '/';
+});
 
 const namePlaceholder = computed(() => {
   const base = workingDir.value.split('/').filter(Boolean).pop() || 'root';
@@ -151,9 +175,7 @@ const namePlaceholder = computed(() => {
 });
 
 function shortPath(p) {
-  if (p === '/paddle') return '~/';
-  if (p === '/root')   return '~/';
-  return p.replace(/^\//, '');
+  return p;
 }
 
 function start() {
@@ -162,6 +184,23 @@ function start() {
   const name = sessionName.value.trim() || base;
   emit('start', { workingDir: dir, name, agent: agent.value });
 }
+
+function toggleDirPicker() {
+  dirPickerOpen.value = !dirPickerOpen.value;
+}
+
+function selectWorkingDir(path) {
+  workingDir.value = path;
+  dirPickerOpen.value = false;
+}
+
+watch(() => settings.newConversationDefaultDir, (next) => {
+  const nextDefault = next || '~';
+  if (!workingDir.value || workingDir.value === lastDefaultDir) {
+    workingDir.value = nextDefault;
+  }
+  lastDefaultDir = nextDefault;
+});
 
 // ── Resume from history ────────────────────────────────────────────────────────
 const projects    = ref([]);
@@ -334,6 +373,33 @@ function fmtDate(iso) {
 .nc-input::placeholder { color: color-mix(in srgb, var(--muted) 50%, transparent); }
 .nc-input-sm { font-size: 12px; padding: 7px 10px; flex: 1; }
 
+.nc-dir-row {
+  display: flex; align-items: center; gap: 8px;
+}
+.nc-dir-row .nc-input {
+  flex: 1; min-width: 0;
+}
+.nc-browse-btn {
+  width: 40px; height: 40px; flex-shrink: 0;
+  background: var(--bg3);
+  border: 1px solid color-mix(in srgb, var(--neon) 20%, transparent);
+  border-radius: 7px;
+  color: var(--neon2);
+  cursor: pointer;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 15px;
+  line-height: 1;
+  display: inline-flex; align-items: center; justify-content: center;
+  transition: background .12s, border-color .12s, color .12s, box-shadow .12s;
+}
+.nc-browse-btn:hover,
+.nc-browse-btn.active {
+  background: color-mix(in srgb, var(--neon) 10%, transparent);
+  border-color: var(--neon);
+  color: var(--neon);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--neon) 8%, transparent);
+}
+
 .nc-quickpicks { display: flex; gap: 6px; flex-wrap: wrap; }
 .nc-agent-picker { display: flex; gap: 8px; flex-wrap: wrap; }
 .nc-agent {
@@ -373,6 +439,7 @@ function fmtDate(iso) {
 .nc-cancel:hover { border-color: var(--neon); color: var(--text); }
 
 .nc-start {
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
   background: color-mix(in srgb, var(--neon) 10%, transparent);
   border: 1px solid var(--neon); border-radius: 7px;
   color: var(--neon); font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 800;
@@ -427,8 +494,9 @@ function fmtDate(iso) {
 .nc-chevron {
   color: var(--neon); font-size: 16px; flex-shrink: 0;
   transition: transform .2s; display: inline-block;
+  transform: rotate(-90deg);
 }
-.nc-chevron.open { transform: rotate(90deg); }
+.nc-chevron.open { transform: rotate(0deg); }
 
 /* Session row */
 .nc-sess-loading {
@@ -456,5 +524,11 @@ function fmtDate(iso) {
 }
 .nc-sess-actions {
   display: flex; gap: 8px; align-items: center; margin-top: 8px;
+}
+
+@media (max-width: 520px) {
+  .nc-card { padding: 16px 12px; }
+  .nc-dir-row { gap: 6px; }
+  .nc-browse-btn { width: 38px; height: 38px; }
 }
 </style>

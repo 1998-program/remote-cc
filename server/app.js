@@ -18,7 +18,7 @@ const fs      = require('fs');
 const os      = require('os');
 const { v4: uuidv4 } = require('uuid');
 const { getProjects, getSessions, readSession } = require('./history');
-const { listDir, readFilePreview, statFile } = require('./fs-handler');
+const { listDir, readFilePreview, statFile, createDirectory, writeUploadedFile, readDownloadFile } = require('./fs-handler');
 
 const APP_SOCK = '/tmp/rcc-app.sock';
 const RCC_DIR  = path.join(os.homedir(), '.rcc');
@@ -80,7 +80,7 @@ app.get('/api/session/:sessionId',  (req, res) => { try { res.json(readSession(r
 // File system API
 app.get('/api/fs/list', (req, res) => {
   try {
-    res.json(listDir(req.query.path || '~', req.query.hidden === 'true'));
+    res.json(listDir(req.query.path || '/', req.query.hidden === 'true'));
   } catch (e) {
     res.status(e.message.startsWith('Access denied') ? 403 : 400).json({ error: e.message });
   }
@@ -95,6 +95,45 @@ app.get('/api/fs/read', (req, res) => {
 app.get('/api/fs/stat', (req, res) => {
   try {
     res.json(statFile(req.query.path || ''));
+  } catch (e) {
+    res.status(e.message.startsWith('Access denied') ? 403 : 400).json({ error: e.message });
+  }
+});
+
+app.post('/api/fs/mkdir', (req, res) => {
+  try {
+    const body = req.body || {};
+    res.json(createDirectory(body.path || req.query.path || '/', body.name || req.query.name || ''));
+  } catch (e) {
+    res.status(e.message.startsWith('Access denied') ? 403 : 400).json({ error: e.message });
+  }
+});
+
+app.post('/api/fs/upload', (req, res) => {
+  const chunks = [];
+  req.on('data', c => chunks.push(c));
+  req.on('end', () => {
+    try {
+      const result = writeUploadedFile(
+        req.query.path || '/',
+        req.headers['x-filename'] || 'upload.bin',
+        Buffer.concat(chunks)
+      );
+      res.json(result);
+    } catch (e) {
+      res.status(e.message.startsWith('Access denied') ? 403 : 400).json({ error: e.message });
+    }
+  });
+  req.on('error', e => res.status(500).json({ error: e.message }));
+});
+
+app.get('/api/fs/download', (req, res) => {
+  try {
+    const file = readDownloadFile(req.query.path || '');
+    res.setHeader('content-type', 'application/octet-stream');
+    res.setHeader('content-length', file.size);
+    res.setHeader('content-disposition', `attachment; filename="${file.name.replace(/"/g, '_')}"; filename*=UTF-8''${encodeURIComponent(file.name)}`);
+    res.end(file.content);
   } catch (e) {
     res.status(e.message.startsWith('Access denied') ? 403 : 400).json({ error: e.message });
   }

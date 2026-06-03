@@ -3,20 +3,24 @@
     <!-- Header row -->
     <div class="cl-header">
       <div class="cl-title">{{ t.conversations }}</div>
-      <button class="cl-new-btn" @click="$emit('new')">{{ icons.new }} {{ t.new_btn }}</button>
+      <button class="cl-new-btn" @click="$emit('new')">
+        <AppIcon name="plus" /> {{ t.new_btn }}
+      </button>
     </div>
 
     <!-- Loading -->
     <div v-if="loading" class="cl-empty">
-      <span class="cl-spinner">{{ icons.spinner }}</span> {{ t.loading }}
+      <AppIcon name="spinner" class="cl-spinner" spin /> {{ t.loading }}
     </div>
 
     <!-- Empty state -->
     <div v-else-if="sessions.length === 0" class="cl-empty">
-      <div class="cl-empty-icon">{{ icons.empty }}</div>
+      <AppIcon name="empty" class="cl-empty-icon" />
       <div class="cl-empty-title">{{ t.no_conv_title }}</div>
       <div class="cl-empty-sub">{{ t.no_conv_sub }}</div>
-      <button class="cl-start-btn" @click="$emit('new')">{{ icons.new }} {{ t.start_conv }}</button>
+      <button class="cl-start-btn" @click="$emit('new')">
+        <AppIcon name="plus" /> {{ t.start_conv }}
+      </button>
     </div>
 
     <!-- Session list -->
@@ -55,7 +59,9 @@
           <div class="cl-meta">
             <span class="cl-agent">{{ agentLabel(s.agent) }}</span>
             <span class="cl-cwd">{{ shortCwd(s.workingDir) }}</span>
-            <span v-if="(s.clientCount || 0) > 1" class="cl-attached" title="Multiple clients attached">⬡{{ s.clientCount }}</span>
+            <span v-if="(s.clientCount || 0) > 1" class="cl-attached" title="Multiple clients attached">
+              <AppIcon name="users" />{{ s.clientCount }}
+            </span>
           </div>
         </div>
 
@@ -64,14 +70,14 @@
           <span class="cl-time">{{ timeAgo(s.lastActiveAt) }}</span>
           <div class="cl-actions">
             <button class="cl-action" :title="t.log_refresh" @click="$emit('log', s)">
-              <span class="cl-act-icon">{{ icons.log }}</span>
+              <AppIcon name="log" class="cl-act-icon" />
             </button>
             <button
               class="cl-action cl-action-close"
               :title="s.alive ? t.stop_session : t.delete_session"
               @click="s.alive ? confirmKill(s) : confirmDelete(s)"
             >
-              <span class="cl-act-icon">{{ icons.delete }}</span>
+              <AppIcon :name="s.alive ? 'stop' : 'trash'" class="cl-act-icon" />
             </button>
           </div>
         </div>
@@ -94,12 +100,12 @@
 <script setup>
 import { ref, reactive, nextTick } from 'vue';
 import { useI18n } from '../i18n.js';
+import AppIcon from './AppIcon.vue';
 const { t } = useI18n();
 
 const props = defineProps({
   sessions: { type: Array,   default: () => [] },
   loading:  { type: Boolean, default: false },
-  icons:    { type: Object,  default: () => ({ log:'≡', kill:'⏹', delete:'✕', new:'＋', status_live:'●', status_dead:'○', empty:'⬡', spinner:'◌' }) },
 });
 const emit = defineEmits(['open', 'new', 'kill', 'delete', 'rename', 'log']);
 
@@ -172,6 +178,7 @@ function timeAgo(ts) {
   color: var(--text); letter-spacing: 0.5px;
 }
 .cl-new-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
   background: color-mix(in srgb, var(--neon) 10%, transparent);
   border: 1px solid var(--border); border-radius: 7px;
   color: var(--neon); font-family: 'Syne', sans-serif;
@@ -192,13 +199,12 @@ function timeAgo(ts) {
 }
 .cl-spinner {
   font-size: 28px; color: var(--neon);
-  animation: spin 1.5s linear infinite; display: inline-block;
 }
-@keyframes spin { to { transform: rotate(360deg); } }
 .cl-empty-icon { font-size: 40px; color: var(--muted); opacity: .4; }
 .cl-empty-title { font-family: 'Syne', sans-serif; font-size: 16px; font-weight: 700; color: var(--text); }
 .cl-empty-sub   { font-size: 12px; color: var(--muted); }
 .cl-start-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
   margin-top: 8px; background: transparent;
   border: 1px solid var(--neon); border-radius: 7px;
   color: var(--neon); font-family: 'Syne', sans-serif;
@@ -273,6 +279,7 @@ function timeAgo(ts) {
   flex-shrink: 0;
 }
 .cl-attached {
+  display: inline-flex; align-items: center; gap: 3px;
   font-family: 'JetBrains Mono', monospace; font-size: 10px;
   color: var(--neon); opacity: .6; flex-shrink: 0;
 }

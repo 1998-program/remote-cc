@@ -25,6 +25,11 @@ const DEFAULTS = {
   maxReconnectDelay: 15000,   // ms 最大重连延迟
   wsKeepAlive:       true,    // 控制 WS 保活
 
+  // ── 远程控制 ──────────────────────────────────
+  fileBrowserDefaultPath: '/', // 文件管理器默认目录
+  shellDefaultCwd: '/',        // 临时 shell 默认目录
+  newConversationDefaultDir: '~', // 新建会话默认目录
+
   // ── 账户 ──────────────────────────────────────
   username: '',
   language: 'zh',   // 'zh' | 'en'
@@ -69,46 +74,53 @@ export const UI_STYLES = [
 ];
 
 // ── 颜色主题 ──────────────────────────────────────────────────────────────────
-// icons: 每个主题专属图标集，贯穿整个 UI
+// icons 保留为兼容字段；界面实际使用 AppIcon 统一渲染。
+const ICON_NAMES = {
+  home: 'home', settings: 'settings', kill: 'stop', delete: 'trash',
+  log: 'log', new: 'plus', status_live: 'status-live', status_dead: 'status-dead',
+  spinner: 'spinner', empty: 'empty', chevron: 'chevron', attach: 'users',
+  files: 'folder',
+};
+
 export const COLOR_THEMES = [
   // ── 深色主题 ──────────────────────────────────
   {
     id: 'cyber', name: 'Cyber', accent: '#00ffd5', dark: true,
-    icons: { home: '⌂', settings: '⚙', kill: '⏹', delete: '✕', log: '≡', new: '＋', status_live: '◉', status_dead: '○', spinner: '◌', empty: '⬡', chevron: '▾', attach: '⬡', files: '⊞' },
+    icons: ICON_NAMES,
   },
   {
     id: 'mocha', name: 'Mocha', accent: '#cba6f7', dark: true,
-    icons: { home: '⌂', settings: '⚙', kill: '▪', delete: '✖', log: '☰', new: '✦', status_live: '●', status_dead: '◌', spinner: '◌', empty: '✿', chevron: '▾', attach: '⬡', files: '⊞' },
+    icons: ICON_NAMES,
   },
   {
     id: 'gruvbox', name: 'Gruvbox', accent: '#fabd2f', dark: true,
-    icons: { home: '⌂', settings: '⚙', kill: '■', delete: '✗', log: '≡', new: '+', status_live: '◆', status_dead: '◇', spinner: '○', empty: '◇', chevron: '▾', attach: '⬡', files: '⊞' },
+    icons: ICON_NAMES,
   },
   {
     id: 'nord', name: 'Nord', accent: '#88c0d0', dark: true,
-    icons: { home: '❄', settings: '⚙', kill: '⏹', delete: '✕', log: '≡', new: '＋', status_live: '●', status_dead: '◌', spinner: '◌', empty: '❄', chevron: '▾', attach: '⬡', files: '⊞' },
+    icons: ICON_NAMES,
   },
   {
     id: 'dracula', name: 'Dracula', accent: '#ff79c6', dark: true,
-    icons: { home: '♦', settings: '⚙', kill: '⏹', delete: '✕', log: '☰', new: '✧', status_live: '♥', status_dead: '♡', spinner: '◌', empty: '♦', chevron: '▾', attach: '⬡', files: '⊞' },
+    icons: ICON_NAMES,
   },
   {
     id: 'solarized', name: 'Solarized', accent: '#268bd2', dark: true,
-    icons: { home: '⌂', settings: '⚙', kill: '⏹', delete: '✕', log: '≡', new: '＋', status_live: '◉', status_dead: '○', spinner: '◌', empty: '◈', chevron: '▾', attach: '⬡', files: '⊞' },
+    icons: ICON_NAMES,
   },
 
   // ── 浅色主题 ──────────────────────────────────
   {
     id: 'latte', name: 'Latte', accent: '#8839ef', dark: false,
-    icons: { home: '⌂', settings: '⚙', kill: '▪', delete: '✖', log: '☰', new: '＋', status_live: '●', status_dead: '◌', spinner: '◌', empty: '✿', chevron: '▾', attach: '⬡', files: '⊞' },
+    icons: ICON_NAMES,
   },
   {
     id: 'paper', name: 'Paper', accent: '#1a73e8', dark: false,
-    icons: { home: '⌂', settings: '⚙', kill: '□', delete: '×', log: '≡', new: '+', status_live: '■', status_dead: '□', spinner: '○', empty: '○', chevron: '›', attach: '⊕', files: '⊞' },
+    icons: ICON_NAMES,
   },
   {
     id: 'day', name: 'Day', accent: '#0969da', dark: false,
-    icons: { home: '⌂', settings: '⚙', kill: '⏹', delete: '✕', log: '≡', new: '＋', status_live: '●', status_dead: '○', spinner: '◌', empty: '◌', chevron: '▾', attach: '⬡', files: '⊞' },
+    icons: ICON_NAMES,
   },
 ];
 

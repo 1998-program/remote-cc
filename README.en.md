@@ -32,6 +32,7 @@ This is not screenshots or log forwarding. It is **true bidirectional real-time 
 - **Real-time multi-client sync** — phone, tablet, and desktop all share the same agent session
 - **Persistent sessions** — close the browser or drop SSH, the agent keeps running; reconnect anytime
 - **History resume** — reads Claude Code / Codex history and resumes conversations in the right working directory
+- **Directory-based task creation** — choose the working directory from the server directory tree
 - **File browser** — browse server files in the web UI, preview code/images, copy paths
 - **Session manager** — run `remotecc` on the server to get a visual menu for managing sessions
 - **Detach shortcut** — `Ctrl+]` goes back to the menu without killing the agent
@@ -42,11 +43,11 @@ This is not screenshots or log forwarding. It is **true bidirectional real-time 
 
 ## Upload Files / Images to Agent
 
-The web terminal toolbar provides a **＋** button that supports three ways to pass files to Claude Code or Codex:
+The web terminal toolbar provides an upload button that supports three ways to pass files to Claude Code or Codex:
 
 | Method | How |
 |--------|-----|
-| Click to select | Click the **＋** button below the terminal, choose any file or image |
+| Click to select | Click the upload button below the terminal, choose any file or image |
 | Drag & drop | Drag files directly onto the terminal area |
 | Paste image | Screenshot then Ctrl+V (auto-uploads) |
 
@@ -56,17 +57,28 @@ Files are stored to `~/.rcc/uploads/` on the server, and the path is automatical
 
 ## File Browser
 
-Click the **⊞** icon in the top bar to open the file browser. It opens in the current session's working directory by default.
+Click the folder icon in the top bar to open the file browser. It opens at the server root directory `/` by default.
 
 | Action | Description |
 |--------|-------------|
 | Single-click a file | Preview on the right (code with line numbers, images inline) |
 | Double-click a file | Full-screen view — easier to read on mobile |
 | Double-click a folder | Navigate into it |
-| ⎘ button | Copy the absolute path of the file or folder |
+| New folder button | Create a subdirectory in the current directory |
+| Copy path button | Copy the absolute path of the file or folder |
+| Upload / download buttons | Upload into the current directory / download files |
+| Drag files | Drop files onto the file browser to upload them into the current directory |
 | Path input box | Type a path directly and press Enter to jump there |
 
+The settings page can configure the file browser default path, temporary shell cwd, new-session default directory, and Web login password.
+
 Supported preview types: `.md` `.txt` `.py` `.js` `.ts` `.json` `.sh` `.yaml` and other code/text files, plus common image formats (`png` `jpg` `gif` `webp`).
+
+---
+
+## Temporary Shell
+
+Click the terminal icon in the top bar to open a temporary shell terminal. It is a normal shell PTY and does not enter the RemoteCC session list; closing the browser or page ends the process. It prefers `zsh`, then `fish`, `bash`, and `sh`; set `RCC_SHELL` or `REMOTECC_SHELL` to override it. For persistence, run `tmux` inside it.
 
 ---
 
@@ -141,6 +153,15 @@ Inside any session: **`Ctrl+]`** goes back to the menu without killing the agent
 
 ## Changelog
 
+### 2026-06-03
+
+- **TUI detach fix**: fixes first `Ctrl+]` detach after creating a session from `rcc-tui`
+- **New task directory picker**: Web new-session flow can choose the working directory from a directory picker
+- **File browser**: opens from `/` by default, supports creating folders, click/drag upload into the current directory, and downloading files
+- **Temporary shell**: adds a non-persistent terminal entry in the Web top bar
+- **Unified icons**: Web top bar, file browser, settings page, and action buttons now use one CSS outline icon system
+- **Settings enhancements**: configure default directories and change the Web login password
+
 ### 2026-05-21
 
 - **Codex history resume**: reads real session metadata from `~/.codex/sessions/`, groups sessions by working directory, and resumes with the correct cwd
@@ -166,9 +187,13 @@ Inside any session: **`Ctrl+]`** goes back to the menu without killing the agent
 
 ## Screenshots
 
-> Web terminal · Session manager · File browser · Mobile
+| Web sessions | Web terminal |
+|---|---|
+| <img src="docs/assets/screenshots/web-home-desktop.png" alt="Web sessions" width="520"> | <img src="docs/assets/screenshots/web-terminal-desktop.png" alt="Web terminal" width="520"> |
 
-(Screenshots welcome 🙏)
+| Mobile sessions | TUI session manager |
+|---|---|
+| <img src="docs/assets/screenshots/mobile-home.jpg" alt="Mobile sessions" width="260"> | <img src="docs/assets/screenshots/tui-session-list.png" alt="TUI session manager" width="520"> |
 
 ---
 

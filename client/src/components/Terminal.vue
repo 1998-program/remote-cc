@@ -12,26 +12,31 @@
       <label class="img-upload-btn" :class="{ uploading }" :title="uploading ? '上传中...' : '上传图片或文件'">
         <input type="file" accept="image/*,*/*" multiple style="display:none"
           @change="onFileSelect" :disabled="uploading" />
-        <span v-if="!uploading">＋</span>
-        <span v-else class="spin">◌</span>
+        <AppIcon v-if="!uploading" name="upload" />
+        <AppIcon v-else name="spinner" spin />
       </label>
       <span v-if="lastUploadPath" class="img-path-hint" :title="lastUploadPath">
-        ✓ {{ shortPath(lastUploadPath) }}
+        <AppIcon name="check" /> {{ shortPath(lastUploadPath) }}
       </span>
     </div>
 
-    <SymbolBar v-if="settings.symbolBar" :currentLine="currentLine" @input="$emit('input', $event)" />
+    <SymbolBar
+      v-if="settings.symbolBar"
+      :currentLine="currentLine"
+      :mode="symbolMode"
+      @input="$emit('input', $event)"
+    />
     <Teleport to="body">
       <div v-if="ctxMenu.show" class="ctx-overlay"
         @click="ctxMenu.show = false"
         @contextmenu.prevent="ctxMenu.show = false">
         <div class="ctx-menu" :style="{ left: ctxMenu.x + 'px', top: ctxMenu.y + 'px' }" @click.stop>
-          <button class="ctx-item" @click="ctxCopy"><span class="ctx-icon">⎘</span> Copy <span class="ctx-kbd">Ctrl+Shift+C</span></button>
+          <button class="ctx-item" @click="ctxCopy"><AppIcon name="copy" class="ctx-icon" /> Copy <span class="ctx-kbd">Ctrl+Shift+C</span></button>
           <!-- Paste：点击后聚焦隐藏 input，让用户用 Ctrl+V 粘贴 -->
-          <button class="ctx-item" @click="ctxPasteClick"><span class="ctx-icon">⎗</span> Paste <span class="ctx-kbd">Ctrl+Shift+V</span></button>
+          <button class="ctx-item" @click="ctxPasteClick"><AppIcon name="paste" class="ctx-icon" /> Paste <span class="ctx-kbd">Ctrl+Shift+V</span></button>
           <div class="ctx-divider"></div>
-          <button class="ctx-item" @click="ctxSelectAll"><span class="ctx-icon">▣</span> Select All</button>
-          <button class="ctx-item" @click="ctxClear"><span class="ctx-icon">⊘</span> Clear</button>
+          <button class="ctx-item" @click="ctxSelectAll"><AppIcon name="select-all" class="ctx-icon" /> Select All</button>
+          <button class="ctx-item" @click="ctxClear"><AppIcon name="clear" class="ctx-icon" /> Clear</button>
         </div>
       </div>
       <!-- 隐藏 input 用于接收系统粘贴事件 -->
@@ -50,11 +55,13 @@ import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import '@xterm/xterm/css/xterm.css';
 import SymbolBar from './SymbolBar.vue';
+import AppIcon from './AppIcon.vue';
 import { THEMES } from '../themes.js';
 import { settings, FONT_FAMILIES } from '../settings.js';
 
 const props = defineProps({
   theme: { type: String, default: 'cyber' },
+  symbolMode: { type: String, default: 'auto' },
 });
 const emit = defineEmits(['input', 'resize', 'paste']);
 
@@ -481,9 +488,8 @@ function ctxClear()     { ctxMenu.show = false; term?.clear(); }
 }
 .img-upload-btn:hover { background: color-mix(in srgb, var(--neon) 15%, transparent); border-color: var(--neon); }
 .img-upload-btn.uploading { opacity: .6; cursor: default; }
-.spin { animation: spin .8s linear infinite; display: inline-block; font-style: normal; }
-@keyframes spin { to { transform: rotate(360deg); } }
 .img-path-hint {
+  display: inline-flex; align-items: center; gap: 4px;
   font-family: 'JetBrains Mono', monospace; font-size: 10px;
   color: var(--neon); opacity: .7;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;

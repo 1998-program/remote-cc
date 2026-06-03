@@ -59,6 +59,7 @@ function expandHome(input) {
 const sessions = new Map();
 const wsToSession = new Map(); // wsId → { sessionId, client }
 const allWS = new Map();       // wsId → ws  (所有已连接的 WS，无论是否 attach 了 session)
+const shellByWS = new Map();   // wsId → ephemeral shell PTY, not persisted
 
 // ── Client wrappers ───────────────────────────────────────────────────────────
 
@@ -378,6 +379,107 @@ function attachSession(ws, wsId, sessionId) {
 
 // ── Message handler ───────────────────────────────────────────────────────────
 
+function resolveShellCwd(input) {
+  const fallback = path.parse(os.homedir()).root;
+  const cwd = expandHome(input || fallback);
+  try {
+    const resolved = path.resolve(cwd);
+    if (fs.statSync(resolved).isDirectory()) return resolved;
+  } catch (_) {}
+  return fallback;
+}
+
+function isExecutable(filePath) {
+  try {
+    fs.accessSync(filePath, fs.constants.X_OK);
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+function findExecutable(command) {
+  if (!command) return '';
+  const expanded = expandHome(command);
+  if (expanded.includes('/') || expanded.includes('\\')) {
+    return isExecutable(expanded) ? expanded : '';
+  }
+  const dirs = (process.env.PATH || '').split(path.delimiter).filter(Boolean);
+  for (const dir of dirs) {
+    const candidate = path.join(dir, expanded);
+    if (isExecutable(candidate)) return candidate;
+  }
+  return '';
+}
+
+function selectShellBin() {
+  if (IS_WIN) return process.env.ComSpec || 'cmd.exe';
+  const candidates = [
+    process.env.RCC_SHELL,
+    process.env.REMOTECC_SHELL,
+    'zsh',
+    'fish',
+    'bash',
+    process.env.SHELL,
+    'sh',
+    '/bin/sh',
+  ];
+  const seen = new Set();
+  for (const candidate of candidates) {
+    if (!candidate || seen.has(candidate)) continue;
+    seen.add(candidate);
+    const found = findExecutable(candidate);
+    if (found) return found;
+  }
+  return '/bin/sh';
+}
+
+function destroyShell(wsId) {
+  const shell = shellByWS.get(wsId);
+  if (!shell) return;
+  shellByWS.delete(wsId);
+  try { if (shell.ptyProcess) shell.ptyProcess.kill(); } catch (_) {}
+}
+
+function createShell(ws, wsId, { cwd, cols = 80, rows = 24, env: clientEnv = {} }) {
+  destroyShell(wsId);
+  const shellCwd = resolveShellCwd(cwd);
+  const shellBin = selectShellBin();
+  const shellEnv = {
+    ...process.env,
+    ...clientEnv,
+    SHELL: IS_WIN ? process.env.ComSpec : shellBin,
+    TERM: IS_WIN ? undefined : 'xterm-256color',
+    COLORTERM: IS_WIN ? undefined : 'truecolor',
+    TERM_PROGRAM: IS_WIN ? undefined : 'RemoteCC',
+  };
+  for (const key of Object.keys(shellEnv)) {
+    if (shellEnv[key] === undefined) delete shellEnv[key];
+  }
+
+  let ptyProcess;
+  try {
+    ptyProcess = pty.spawn(shellBin, [], IS_WIN
+      ? { useConpty: true, cols, rows, cwd: shellCwd, env: shellEnv }
+      : { name: 'xterm-256color', cols, rows, cwd: shellCwd, env: shellEnv });
+  } catch (err) {
+    try { ws.send(JSON.stringify({ type: 'shell_error', message: err.message })); } catch (_) {}
+    return;
+  }
+
+  const shell = { ptyProcess, cols, rows, cwd: shellCwd };
+  shellByWS.set(wsId, shell);
+  try { ws.send(JSON.stringify({ type: 'shell_ready', cwd: shellCwd })); } catch (_) {}
+
+  ptyProcess.onData(data => {
+    try { if (ws.readyState === 1) ws.send(data); } catch (_) {}
+  });
+  ptyProcess.onExit(({ exitCode }) => {
+    shellByWS.delete(wsId);
+    try { if (ws.readyState === 1) ws.send(JSON.stringify({ type: 'shell_exit', exitCode })); } catch (_) {}
+  });
+}
+
 function handleMessage(ws, wsId, raw) {
   // 输入时自动将 PTY resize 到该 client 的尺寸（谁在输入就按谁的窗口渲染）
   function resizeToClient(client, sess) {
@@ -393,6 +495,13 @@ function handleMessage(ws, wsId, raw) {
   // 如果解析失败，或解析结果不是带 type 字段的对象（例如 "1" 被 JSON.parse 解析为数字 1）
   // 则视为原始 PTY 输入（raw string）
   if (!msg || typeof msg !== 'object' || !msg.type) {
+    const shell = shellByWS.get(wsId);
+    if (shell && shell.ptyProcess) {
+      try { shell.ptyProcess.resize(shell.cols || 80, shell.rows || 24); } catch (_) {}
+      shell.ptyProcess.write(raw);
+      return;
+    }
+
     // Raw string → PTY input
     const entry = wsToSession.get(wsId);
     const session = entry && sessions.get(entry.sessionId);
@@ -408,6 +517,34 @@ function handleMessage(ws, wsId, raw) {
   const session = entry && sessions.get(entry.sessionId);
 
   switch (msg.type) {
+    case 'shell_start':
+      createShell(ws, wsId, msg);
+      break;
+
+    case 'shell_resize': {
+      const shell = shellByWS.get(wsId);
+      if (shell && shell.ptyProcess) {
+        shell.cols = msg.cols || 80;
+        shell.rows = msg.rows || 24;
+        try { shell.ptyProcess.resize(shell.cols, shell.rows); } catch (_) {}
+      }
+      break;
+    }
+
+    case 'shell_input': {
+      const shell = shellByWS.get(wsId);
+      if (shell && shell.ptyProcess && typeof msg.data === 'string') {
+        try { shell.ptyProcess.resize(shell.cols || 80, shell.rows || 24); } catch (_) {}
+        shell.ptyProcess.write(msg.data);
+      }
+      break;
+    }
+
+    case 'shell_kill':
+      destroyShell(wsId);
+      try { if (ws.readyState === 1) ws.send(JSON.stringify({ type: 'shell_exit', exitCode: null })); } catch (_) {}
+      break;
+
     case 'start':
       createSession(ws, wsId, msg);
       break;
@@ -471,6 +608,7 @@ function handleMessage(ws, wsId, raw) {
 // ── Close WS ─────────────────────────────────────────────────────────────────
 
 function closeWS(wsId) {
+  destroyShell(wsId);
   const entry = wsToSession.get(wsId);
   if (entry) {
     const session = sessions.get(entry.sessionId);

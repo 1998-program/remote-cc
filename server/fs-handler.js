@@ -3,11 +3,17 @@ const path = require('path');
 const os   = require('os');
 
 // ── 安全根目录白名单 ──────────────────────────────────────────────────────────
-const DEFAULT_ROOTS = [os.homedir(), '/tmp', '/paddle'];
+const DEFAULT_ROOTS = [path.parse(os.homedir()).root];
 
 function getAllowedRoots() {
   const extra = (process.env.FS_ROOTS || '').split(':').filter(Boolean);
-  return [...DEFAULT_ROOTS, ...extra];
+  return [...DEFAULT_ROOTS, ...extra].map(root => path.resolve(root));
+}
+
+function isAllowedPath(resolved, root) {
+  const rootDir = path.parse(root).root;
+  if (root === rootDir) return resolved.startsWith(rootDir);
+  return resolved === root || resolved.startsWith(root + path.sep);
 }
 
 /**
@@ -17,14 +23,14 @@ function getAllowedRoots() {
  * @throws {Error}          路径不安全时抛出
  */
 function resolveSafePath(reqPath) {
-  if (!reqPath) reqPath = os.homedir();
+  if (!reqPath) reqPath = path.parse(os.homedir()).root;
   // 展开 ~ 为 homedir
   if (reqPath === '~' || reqPath.startsWith('~/')) {
     reqPath = os.homedir() + reqPath.slice(1);
   }
   const resolved = path.resolve(reqPath);
   const allowed = getAllowedRoots();
-  const ok = allowed.some(root => resolved === root || resolved.startsWith(root + path.sep));
+  const ok = allowed.some(root => isAllowedPath(resolved, root));
   if (!ok) throw new Error(`Access denied: ${resolved}`);
   return resolved;
 }
@@ -168,4 +174,73 @@ function statFile(reqPath) {
   };
 }
 
-module.exports = { resolveSafePath, listDir, readFilePreview, statFile };
+function sanitizeFilename(name) {
+  const raw = String(name || 'upload.bin').split(/[\\/]/).pop();
+  const base = raw.replace(/[\x00-\x1f\x7f]/g, '_').trim();
+  return base && base !== '.' && base !== '..' ? base : 'upload.bin';
+}
+
+function sanitizeDirectoryName(name) {
+  const raw = String(name || '').trim();
+  if (!raw || raw === '.' || raw === '..') throw new Error('Invalid directory name');
+  if (raw.includes('/') || raw.includes('\\')) throw new Error('Directory name cannot contain path separators');
+  const safe = raw.replace(/[\x00-\x1f\x7f]/g, '_').trim();
+  if (!safe || safe === '.' || safe === '..') throw new Error('Invalid directory name');
+  return safe;
+}
+
+function uniqueFilePath(dir, filename) {
+  const parsed = path.parse(filename);
+  let candidate = path.join(dir, filename);
+  let index = 1;
+  while (fs.existsSync(candidate)) {
+    candidate = path.join(dir, `${parsed.name}-${index}${parsed.ext}`);
+    index += 1;
+  }
+  return candidate;
+}
+
+function writeUploadedFile(reqDir, filename, buffer) {
+  const safeDir = resolveSafePath(reqDir);
+  const stat = fs.statSync(safeDir);
+  if (!stat.isDirectory()) throw new Error('Not a directory');
+
+  const safeName = sanitizeFilename(filename);
+  const filePath = uniqueFilePath(safeDir, safeName);
+  fs.writeFileSync(filePath, buffer);
+  return statFile(filePath);
+}
+
+function createDirectory(reqDir, dirname) {
+  const safeDir = resolveSafePath(reqDir);
+  const stat = fs.statSync(safeDir);
+  if (!stat.isDirectory()) throw new Error('Not a directory');
+
+  const safeName = sanitizeDirectoryName(dirname);
+  const dirPath = path.join(safeDir, safeName);
+  if (fs.existsSync(dirPath)) throw new Error('Directory already exists');
+  fs.mkdirSync(dirPath);
+  return statFile(dirPath);
+}
+
+function readDownloadFile(reqPath) {
+  const safePath = resolveSafePath(reqPath);
+  const stat = fs.statSync(safePath);
+  if (stat.isDirectory()) throw new Error('Is a directory');
+  return {
+    path: safePath,
+    name: path.basename(safePath),
+    size: stat.size,
+    content: fs.readFileSync(safePath),
+  };
+}
+
+module.exports = {
+  resolveSafePath,
+  listDir,
+  readFilePreview,
+  statFile,
+  createDirectory,
+  writeUploadedFile,
+  readDownloadFile,
+};

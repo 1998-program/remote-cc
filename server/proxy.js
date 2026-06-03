@@ -20,7 +20,15 @@ const path        = require('path');
 const fs          = require('fs');
 const os          = require('os');
 const { v4: uuidv4 } = require('uuid');
-const { wsAuth, validateTokenExported, createTokenExported, LOCAL_TOKEN_FILE, writeLocalToken } = require('./auth');
+const {
+  wsAuth,
+  validateTokenExported,
+  createTokenExported,
+  validateCredentials,
+  changePassword,
+  LOCAL_TOKEN_FILE,
+  writeLocalToken,
+} = require('./auth');
 const {
   handleMessage, closeWS, listSessions, readLog,
   registerWS, unregisterWS,
@@ -233,13 +241,29 @@ function proxyToApp(req, res) {
 
 // ── HTTP server ───────────────────────────────────────────────────────────────
 
-const RC_USER = process.env.RC_USER || 'admin';
-const RC_PASS = process.env.RC_PASS || 'changeme';
-
 function jsonReply(res, status, obj) {
   const body = JSON.stringify(obj);
   res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'content-length': Buffer.byteLength(body) });
   res.end(body);
+}
+
+function readJsonBody(req, cb) {
+  const chunks = [];
+  let size = 0;
+  req.on('data', c => {
+    size += c.length;
+    if (size > 64 * 1024) {
+      req.destroy();
+      return;
+    }
+    chunks.push(c);
+  });
+  req.on('end', () => {
+    let body = {};
+    try { body = JSON.parse(Buffer.concat(chunks).toString('utf8')); } catch (_) {}
+    cb(body);
+  });
+  req.on('error', () => cb({}));
 }
 
 const server = http.createServer((req, res) => {
@@ -247,13 +271,9 @@ const server = http.createServer((req, res) => {
 
   // ── POST /api/login：在 proxy 侧处理，token 登记到 proxy 的 auth 实例 ──────
   if (req.method === 'POST' && urlPath === '/api/login') {
-    const chunks = [];
-    req.on('data', c => chunks.push(c));
-    req.on('end', () => {
-      let body = {};
-      try { body = JSON.parse(Buffer.concat(chunks).toString('utf8')); } catch (_) {}
+    readJsonBody(req, body => {
       const { username, password } = body;
-      if (username === RC_USER && password === RC_PASS) {
+      if (validateCredentials(username, password)) {
         jsonReply(res, 200, { token: createTokenExported() });
       } else {
         jsonReply(res, 401, { error: 'Invalid credentials' });
@@ -275,6 +295,18 @@ const server = http.createServer((req, res) => {
 
   if (!validateTokenExported(tok)) {
     jsonReply(res, 401, { error: 'Unauthorized' });
+    return;
+  }
+
+  if (req.method === 'POST' && urlPath === '/api/change-password') {
+    readJsonBody(req, body => {
+      try {
+        changePassword(body.currentPassword, body.newPassword);
+        jsonReply(res, 200, { ok: true });
+      } catch (e) {
+        jsonReply(res, e.status || 400, { error: e.message || 'Bad request' });
+      }
+    });
     return;
   }
 

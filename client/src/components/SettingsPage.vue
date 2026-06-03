@@ -48,7 +48,7 @@
             >
               <span class="sp-color-dot" :style="{ background: ct.accent }"></span>
               <span class="sp-color-name">{{ ct.name }}</span>
-              <span class="sp-icon-preview">{{ ct.icons.settings }}</span>
+              <AppIcon name="settings" class="sp-icon-preview" />
             </button>
           </div>
           <!-- 浅色主题 -->
@@ -62,7 +62,7 @@
             >
               <span class="sp-color-dot" :style="{ background: ct.accent }"></span>
               <span class="sp-color-name" style="color:#333">{{ ct.name }}</span>
-              <span class="sp-icon-preview" :style="{ color: ct.accent }">{{ ct.icons.settings }}</span>
+              <AppIcon name="settings" class="sp-icon-preview" :style="{ color: ct.accent }" />
             </button>
           </div>
         </div>
@@ -82,18 +82,18 @@
         <div class="sp-field sp-field-row">
           <label class="sp-label">{{ t.font_size }}</label>
           <div class="sp-stepper">
-            <button class="sp-step-btn" @click="settings.fontSize = Math.max(8, settings.fontSize - 1)">−</button>
+            <button class="sp-step-btn" @click="settings.fontSize = Math.max(8, settings.fontSize - 1)"><AppIcon name="minus" /></button>
             <span class="sp-step-val">{{ settings.fontSize }}px</span>
-            <button class="sp-step-btn" @click="settings.fontSize = Math.min(24, settings.fontSize + 1)">＋</button>
+            <button class="sp-step-btn" @click="settings.fontSize = Math.min(24, settings.fontSize + 1)"><AppIcon name="plus" /></button>
           </div>
         </div>
 
         <div class="sp-field sp-field-row">
           <label class="sp-label">{{ t.line_height }}</label>
           <div class="sp-stepper">
-            <button class="sp-step-btn" @click="settings.lineHeight = Math.max(1.0, +(settings.lineHeight - 0.1).toFixed(1))">−</button>
+            <button class="sp-step-btn" @click="settings.lineHeight = Math.max(1.0, +(settings.lineHeight - 0.1).toFixed(1))"><AppIcon name="minus" /></button>
             <span class="sp-step-val">{{ settings.lineHeight.toFixed(1) }}</span>
-            <button class="sp-step-btn" @click="settings.lineHeight = Math.min(2.0, +(settings.lineHeight + 0.1).toFixed(1))">＋</button>
+            <button class="sp-step-btn" @click="settings.lineHeight = Math.min(2.0, +(settings.lineHeight + 0.1).toFixed(1))"><AppIcon name="plus" /></button>
           </div>
         </div>
 
@@ -118,9 +118,9 @@
         <div class="sp-field sp-field-row">
           <label class="sp-label">{{ t.scrollback }}</label>
           <div class="sp-stepper">
-            <button class="sp-step-btn" @click="settings.scrollback = Math.max(500, settings.scrollback - 500)">−</button>
+            <button class="sp-step-btn" @click="settings.scrollback = Math.max(500, settings.scrollback - 500)"><AppIcon name="minus" /></button>
             <span class="sp-step-val">{{ settings.scrollback.toLocaleString() }}</span>
-            <button class="sp-step-btn" @click="settings.scrollback = Math.min(50000, settings.scrollback + 500)">＋</button>
+            <button class="sp-step-btn" @click="settings.scrollback = Math.min(50000, settings.scrollback + 500)"><AppIcon name="plus" /></button>
           </div>
         </div>
 
@@ -140,19 +140,49 @@
         <div class="sp-field sp-field-row">
           <label class="sp-label">{{ t.reconnect_init }}</label>
           <div class="sp-stepper">
-            <button class="sp-step-btn" @click="settings.reconnectDelay = Math.max(500, settings.reconnectDelay - 500)">−</button>
+            <button class="sp-step-btn" @click="settings.reconnectDelay = Math.max(500, settings.reconnectDelay - 500)"><AppIcon name="minus" /></button>
             <span class="sp-step-val">{{ settings.reconnectDelay / 1000 }}s</span>
-            <button class="sp-step-btn" @click="settings.reconnectDelay = Math.min(10000, settings.reconnectDelay + 500)">＋</button>
+            <button class="sp-step-btn" @click="settings.reconnectDelay = Math.min(10000, settings.reconnectDelay + 500)"><AppIcon name="plus" /></button>
           </div>
         </div>
 
         <div class="sp-field sp-field-row">
           <label class="sp-label">{{ t.reconnect_max }}</label>
           <div class="sp-stepper">
-            <button class="sp-step-btn" @click="settings.maxReconnectDelay = Math.max(5000, settings.maxReconnectDelay - 5000)">−</button>
+            <button class="sp-step-btn" @click="settings.maxReconnectDelay = Math.max(5000, settings.maxReconnectDelay - 5000)"><AppIcon name="minus" /></button>
             <span class="sp-step-val">{{ settings.maxReconnectDelay / 1000 }}s</span>
-            <button class="sp-step-btn" @click="settings.maxReconnectDelay = Math.min(60000, settings.maxReconnectDelay + 5000)">＋</button>
+            <button class="sp-step-btn" @click="settings.maxReconnectDelay = Math.min(60000, settings.maxReconnectDelay + 5000)"><AppIcon name="plus" /></button>
           </div>
+        </div>
+      </section>
+
+      <!-- ── 远程控制 ─────────────────────────────────────────── -->
+      <section class="sp-section">
+        <div class="sp-section-title">{{ t.remote_control }}</div>
+
+        <div v-for="field in directoryFields" :key="field.key" class="sp-field">
+          <label class="sp-label">{{ t[field.labelKey] }}</label>
+          <div class="sp-path-row">
+            <input
+              v-model="settings[field.key]"
+              class="sp-input"
+              spellcheck="false"
+              autocorrect="off"
+              autocapitalize="off"
+              :placeholder="field.fallback"
+              @blur="normalizePathSetting(field.key, field.fallback)"
+              @keyup.enter="normalizePathSetting(field.key, field.fallback)"
+            />
+            <button class="sp-icon-btn" :class="{ active: dirPickerTarget === field.key }" type="button" @click="toggleDirPicker(field.key)">
+              <AppIcon name="folder" />
+            </button>
+          </div>
+          <DirectoryPicker
+            v-if="dirPickerTarget === field.key"
+            :initial-path="settings[field.key] || field.fallback"
+            @select="path => selectDirectory(field.key, path)"
+            @cancel="dirPickerTarget = ''"
+          />
         </div>
       </section>
 
@@ -183,6 +213,43 @@
         </div>
 
         <div class="sp-field">
+          <label class="sp-label">{{ t.change_password }}</label>
+          <div class="sp-password-grid">
+            <input
+              v-model="passwordForm.current"
+              class="sp-input"
+              type="password"
+              autocomplete="current-password"
+              :placeholder="t.current_password"
+            />
+            <input
+              v-model="passwordForm.next"
+              class="sp-input"
+              type="password"
+              autocomplete="new-password"
+              :placeholder="t.new_password"
+            />
+            <input
+              v-model="passwordForm.confirm"
+              class="sp-input"
+              type="password"
+              autocomplete="new-password"
+              :placeholder="t.confirm_password"
+              @keyup.enter="changePassword"
+            />
+          </div>
+          <div class="sp-inline-actions">
+            <button class="sp-primary-btn" :disabled="changingPassword || !passwordCanSubmit" @click="changePassword">
+              <AppIcon v-if="changingPassword" name="spinner" spin />
+              <AppIcon v-else name="check" />
+              {{ changingPassword ? t.saving : t.update_password }}
+            </button>
+            <span v-if="passwordStatus" class="sp-status ok">{{ passwordStatus }}</span>
+            <span v-if="passwordError" class="sp-status err">{{ passwordError }}</span>
+          </div>
+        </div>
+
+        <div class="sp-field">
           <button class="sp-danger-btn" @click="$emit('logout')">{{ t.sign_out }}</button>
         </div>
       </section>
@@ -200,15 +267,34 @@
 </template>
 
 <script setup>
-import { computed } from 'vue';
+import { computed, reactive, ref } from 'vue';
 import { settings, UI_STYLES, COLOR_THEMES, FONT_FAMILIES, resetSettings } from '../settings.js';
 import { useI18n } from '../i18n.js';
+import { api } from '../api/index.js';
+import AppIcon from './AppIcon.vue';
+import DirectoryPicker from './DirectoryPicker.vue';
 
 const { t } = useI18n();
 const emit = defineEmits(['logout']);
 
 const darkThemes  = computed(() => COLOR_THEMES.filter(ct => ct.dark !== false));
 const lightThemes = computed(() => COLOR_THEMES.filter(ct => ct.dark === false));
+
+const directoryFields = [
+  { key: 'fileBrowserDefaultPath', labelKey: 'file_browser_default_path', fallback: '/' },
+  { key: 'shellDefaultCwd', labelKey: 'shell_default_cwd', fallback: '/' },
+  { key: 'newConversationDefaultDir', labelKey: 'new_conv_default_dir', fallback: '~' },
+];
+
+const dirPickerTarget = ref('');
+const passwordForm = reactive({ current: '', next: '', confirm: '' });
+const changingPassword = ref(false);
+const passwordStatus = ref('');
+const passwordError = ref('');
+
+const passwordCanSubmit = computed(() =>
+  Boolean(passwordForm.current && passwordForm.next && passwordForm.confirm && passwordForm.next === passwordForm.confirm)
+);
 
 const LANGUAGES = [
   { id: 'zh', name: '中文' },
@@ -217,6 +303,46 @@ const LANGUAGES = [
 
 function onReset() {
   if (confirm(t.value.reset_confirm)) resetSettings();
+}
+
+function normalizePathSetting(key, fallback) {
+  const value = String(settings[key] || '').trim();
+  settings[key] = value || fallback;
+}
+
+function toggleDirPicker(key) {
+  dirPickerTarget.value = dirPickerTarget.value === key ? '' : key;
+}
+
+function selectDirectory(key, path) {
+  settings[key] = path || '/';
+  dirPickerTarget.value = '';
+}
+
+async function changePassword() {
+  passwordStatus.value = '';
+  passwordError.value = '';
+  if (!passwordForm.current || !passwordForm.next || !passwordForm.confirm) {
+    passwordError.value = t.value.password_required;
+    return;
+  }
+  if (passwordForm.next !== passwordForm.confirm) {
+    passwordError.value = t.value.password_mismatch;
+    return;
+  }
+  changingPassword.value = true;
+  try {
+    await api.changePassword(passwordForm.current, passwordForm.next);
+    passwordForm.current = '';
+    passwordForm.next = '';
+    passwordForm.confirm = '';
+    passwordStatus.value = t.value.password_updated;
+    setTimeout(() => emit('logout'), 900);
+  } catch (err) {
+    passwordError.value = err.message || t.value.password_update_failed;
+  } finally {
+    changingPassword.value = false;
+  }
 }
 </script>
 
@@ -395,6 +521,73 @@ function onReset() {
 }
 .sp-select:focus { border-color: var(--neon); }
 
+.sp-input {
+  width: 100%;
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 6px; color: var(--text);
+  font-family: 'JetBrains Mono', monospace; font-size: 12px;
+  padding: 7px 10px; outline: none;
+  transition: border-color .15s, box-shadow .15s;
+}
+.sp-input:focus {
+  border-color: var(--neon);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--neon) 8%, transparent);
+}
+.sp-input::placeholder {
+  color: color-mix(in srgb, var(--muted) 65%, transparent);
+}
+.sp-path-row {
+  display: flex; align-items: center; gap: 8px;
+  margin-top: 7px;
+}
+.sp-icon-btn {
+  width: 32px; height: 31px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 6px; color: var(--muted);
+  cursor: pointer; flex-shrink: 0;
+  transition: color .12s, border-color .12s, background .12s;
+}
+.sp-icon-btn:hover,
+.sp-icon-btn.active {
+  color: var(--neon);
+  border-color: var(--neon);
+  background: color-mix(in srgb, var(--neon) 8%, transparent);
+}
+.sp-password-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
+.sp-inline-actions {
+  display: flex; align-items: center; gap: 10px;
+  margin-top: 8px; flex-wrap: wrap;
+}
+.sp-primary-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  background: color-mix(in srgb, var(--neon) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--neon) 55%, transparent);
+  border-radius: 7px;
+  color: var(--neon);
+  font-family: 'Syne', sans-serif; font-size: 12px; font-weight: 700;
+  padding: 8px 16px; cursor: pointer;
+  transition: background .15s, border-color .15s, opacity .15s;
+}
+.sp-primary-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--neon) 16%, transparent);
+  border-color: var(--neon);
+}
+.sp-primary-btn:disabled {
+  opacity: .5; cursor: not-allowed;
+}
+.sp-status {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+}
+.sp-status.ok { color: #a6e3a1; }
+.sp-status.err { color: #f38ba8; }
+
 /* ── Stepper ─────────────────────────────────── */
 .sp-stepper {
   display: flex; align-items: center; gap: 8px;
@@ -458,4 +651,8 @@ function onReset() {
   padding: 8px 18px; cursor: pointer; transition: border-color .15s, color .15s;
 }
 .sp-ghost-btn:hover { border-color: var(--neon); color: var(--text); }
+
+@media (max-width: 760px) {
+  .sp-password-grid { grid-template-columns: 1fr; }
+}
 </style>

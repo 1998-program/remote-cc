@@ -43,10 +43,11 @@ remote-cc/
 │   └── src/
 │       ├── App.vue          # 主组件：认证/路由/WS/会话管理
 │       ├── router.js        # Hash 路由
-│       ├── settings.js      # 全局设置 + 主题/图标定义
+│       ├── settings.js      # 全局设置 + 主题定义
 │       ├── themes.js        # xterm.js 终端配色
 │       ├── i18n.js          # 中英文字典
 │       └── components/
+│           ├── AppIcon.vue          # 统一 CSS 线框图标
 │           ├── Terminal.vue         # xterm.js 渲染（纯展示）
 │           ├── SymbolBar.vue        # CC/SH 双模式快捷键栏
 │           ├── ConversationList.vue # 首页会话列表
@@ -64,7 +65,7 @@ remote-cc/
 ### 添加颜色主题
 
 1. `client/src/themes.js` 添加 xterm 配色
-2. `client/src/settings.js` 的 `COLOR_THEMES` 数组添加条目（含 `icons` 字段）
+2. `client/src/settings.js` 的 `COLOR_THEMES` 数组添加主题条目
 3. `client/src/App.vue` 全局 CSS 添加 CSS 变量
 
 ### 添加 WS 消息类型
@@ -127,10 +128,11 @@ remote-cc/
 │   └── src/
 │       ├── App.vue          # Main: auth/routing/WS/session mgmt
 │       ├── router.js        # Hash router
-│       ├── settings.js      # Global settings + themes/icons
+│       ├── settings.js      # Global settings + themes
 │       ├── themes.js        # xterm.js color schemes
 │       ├── i18n.js          # zh/en dictionary
 │       └── components/
+│           ├── AppIcon.vue          # Unified CSS outline icons
 │           ├── Terminal.vue         # xterm.js renderer (pure display)
 │           ├── SymbolBar.vue        # CC/SH dual-mode symbol bar
 │           ├── ConversationList.vue # Home session list
@@ -148,7 +150,7 @@ remote-cc/
 ### Adding a Color Theme
 
 1. Add xterm color scheme in `client/src/themes.js`
-2. Add entry to `COLOR_THEMES` in `client/src/settings.js` (include `icons` field)
+2. Add an entry to `COLOR_THEMES` in `client/src/settings.js`
 3. Add CSS variables in the global `<style>` block in `client/src/App.vue`
 
 ### Adding a WS Message Type

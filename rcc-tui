@@ -535,6 +535,15 @@ function doAttach(sp, sname, onDetach, sessionId) {
   sock.on('close', () => detach(false));
 }
 
+function returnToMainAfterDetach() {
+  // doAttach removes readline's internal data listeners; re-register before menu().
+  readline.emitKeypressEvents(process.stdin);
+  pageMain().catch(err => {
+    wr(A.show + '\n' + A.red + '  错误: ' + err.message + A.R + '\n');
+    process.exit(1);
+  });
+}
+
 // ── 通用菜单 ──────────────────────────────────────────────────────────────────
 // items: [{ label, sub?, hint?, _sep?, _disabled? }]
 // 返回 index（number）或 null（q/Esc）
@@ -948,7 +957,7 @@ async function doCreate(info, workingDir, name, resumeSessionId, agent = 'claude
     for (let i = 0; i < 50; i++) { if (IS_WIN || fs.existsSync(sp)) break; await sl(100); }
     if (!IS_WIN && !fs.existsSync(sp)) throw new Error('Socket 未建立');
 
-    doAttach(sp, name, pageMain);
+    doAttach(sp, name, returnToMainAfterDetach);
   } catch (e) {
     wr(A.up(1) + A.erase + A.red + '  ✗ 创建失败: ' + e.message + '\n' + A.R);
     await sl(2500);
@@ -1001,17 +1010,7 @@ async function startTui() {
       m.sessionId.startsWith(attachArg)
     );
     if (s && s.alive && sockAlive(s.sessionId)) {
-      // doAttach 内部会 removeAllListeners('data')，导致 readline.emitKeypressEvents
-      // 注册的内部 data 监听器被删除，onDetach 后 menu() 的 keypress 无法触发。
-      // 断开后重新注册，确保 pageMain 的 menu() 能正常响应键盘。
-      const onDetach = () => {
-        readline.emitKeypressEvents(process.stdin);
-        pageMain().catch(err => {
-          wr(A.show + '\n' + A.red + '  错误: ' + err.message + A.R + '\n');
-          process.exit(1);
-        });
-      };
-      doAttach(sockPath(s.sessionId), s.name, onDetach, s.sessionId);
+      doAttach(sockPath(s.sessionId), s.name, returnToMainAfterDetach, s.sessionId);
       return;
     }
     // 找不到或不可用，提示后进主页

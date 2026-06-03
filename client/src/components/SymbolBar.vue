@@ -44,18 +44,18 @@
 </template>
 
 <script setup>
-import { ref, reactive, watch } from 'vue';
+import { computed, reactive } from 'vue';
 
 const props = defineProps({
   currentLine: { type: String, default: '' },
+  mode: { type: String, default: 'auto' },
 });
 const emit = defineEmits(['input']);
 
-const shellMode = ref(false);
-
-// 自动切换：行首有 ! → Shell；无 ! 或空 → CC
-watch(() => props.currentLine, (line) => {
-  shellMode.value = line.startsWith('!');
+const shellMode = computed(() => {
+  if (props.mode === 'shell') return true;
+  if (props.mode === 'cc') return false;
+  return props.currentLine.startsWith('!');
 });
 
 // ── CC 模式：不含回车 ─────────────────────────────────────────────────────────

@@ -58,6 +58,8 @@ cd ../client && npm install && npm run build
 | `CODEX_PROXY` | — | 仅 Codex CLI 使用的代理 URL |
 | `AGENT_NO_PROXY` | `localhost,127.0.0.1,::1` | Agent CLI 的 NO_PROXY |
 
+`RC_PASS` 是初始/兜底密码。通过 Web 设置页修改密码后，新密码会以 scrypt 哈希写入 `~/.rcc/auth.json`，后续登录优先使用该文件。
+
 如果 Codex 需要代理，设置 `CODEX_PROXY=http://127.0.0.1:7890` 这类本地代理地址即可。RemoteCC 只会把它注入 Codex CLI；Codex 执行任务时会排除 `HTTP_PROXY` / `HTTPS_PROXY` / `ALL_PROXY` 等代理变量，避免影响项目命令。
 
 #### 4. 安装命令行工具
@@ -201,6 +203,8 @@ cd ../client && npm install && npm run build
 | `CLAUDE_PROXY` | — | Proxy URL used only by the Claude Code CLI |
 | `CODEX_PROXY` | — | Proxy URL used only by the Codex CLI |
 | `AGENT_NO_PROXY` | `localhost,127.0.0.1,::1` | NO_PROXY for agent CLIs |
+
+`RC_PASS` is the initial/fallback password. After changing the password from the Web settings page, the new password is stored as a scrypt hash in `~/.rcc/auth.json` and takes precedence for future logins.
 
 If Codex needs a proxy, set a local proxy URL such as `CODEX_PROXY=http://127.0.0.1:7890`. RemoteCC injects it only into the Codex CLI; Codex child tasks exclude `HTTP_PROXY` / `HTTPS_PROXY` / `ALL_PROXY` so project commands are not forced through the proxy.
 

@@ -3,8 +3,8 @@
     <div class="lv-header">
       <span class="lv-title">LOG — {{ session.name }}</span>
       <div class="lv-actions">
-        <button class="lv-btn" @click="load">↻ Refresh</button>
-        <button class="lv-btn lv-close" @click="$emit('close')">✕</button>
+        <button class="lv-btn" @click="load"><AppIcon name="refresh" /> Refresh</button>
+        <button class="lv-btn lv-close" @click="$emit('close')"><AppIcon name="close" /></button>
       </div>
     </div>
     <div class="lv-path">{{ session.logPath }}</div>
@@ -19,6 +19,7 @@
 <script setup>
 import { ref, onMounted, watch } from 'vue';
 import { api } from '../api/index.js';
+import AppIcon from './AppIcon.vue';
 
 const props = defineProps({
   session: { type: Object, required: true },
@@ -73,6 +74,10 @@ watch(() => props.session.sessionId, load);
 }
 .lv-actions { display: flex; gap: 6px; }
 .lv-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   background: transparent;
   border: 1px solid color-mix(in srgb, var(--neon) 25%, transparent);
   border-radius: 4px;

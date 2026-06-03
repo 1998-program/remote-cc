@@ -30,7 +30,7 @@
             <button class="switcher-btn" @click="switcherOpen = !switcherOpen">
               <span class="switcher-dot" :class="currentMeta?.alive ? 'live' : 'dead'"></span>
               <span class="switcher-name">{{ currentMeta?.name || '…' }}</span>
-              <span class="switcher-chevron" :class="{ open: switcherOpen }">{{ icons.chevron }}</span>
+              <AppIcon name="chevron" class="switcher-chevron" :class="{ open: switcherOpen }" />
             </button>
             <!-- Dropdown -->
             <div v-if="switcherOpen" class="switcher-dropdown">
@@ -41,21 +41,23 @@
                 :class="{ current: s.sessionId === activeSessionId }"
                 @click="pickSession(s)"
               >
-                <span class="switcher-dot live">{{ icons.status_live }}</span>
+                <span class="switcher-dot live"></span>
                 <span class="switcher-item-name">{{ s.name }}</span>
                 <span class="switcher-item-cwd">{{ shortCwd(s.workingDir) }}</span>
                 <button class="switcher-kill-btn" :title="t.stop_session"
-                  @click.stop="killSession(s); switcherOpen = false">{{ icons.delete }}</button>
+                  @click.stop="killSession(s); switcherOpen = false">
+                  <AppIcon name="trash" />
+                </button>
               </button>
               <div v-if="!aliveSessions.length" class="switcher-empty">{{ t.no_sessions }}</div>
               <div class="switcher-divider"></div>
               <button v-if="currentMeta?.alive"
                 class="switcher-item switcher-danger"
                 @click="killSession(currentMeta); switcherOpen = false">
-                {{ icons.delete }} {{ t.stop_session }}
+                <AppIcon name="trash" /> {{ t.stop_session }}
               </button>
               <button class="switcher-item switcher-new" @click="switcherOpen = false; view = 'home'">
-                {{ icons.new }} {{ t.new_conv }}
+                <AppIcon name="plus" /> {{ t.new_conv }}
               </button>
             </div>
           </div>
@@ -69,41 +71,45 @@
           <!-- Multi-client indicator -->
           <span v-if="view === 'terminal' && (currentMeta?.clientCount || 0) > 1"
             class="topbar-badge" title="Multiple terminals attached">
-            {{ icons.attach }}{{ currentMeta.clientCount }}
+            <AppIcon name="users" />{{ currentMeta.clientCount }}
           </span>
-          <!-- Home (only in terminal view) -->
-          <button v-if="view === 'terminal'"
+          <!-- Home (only in terminal-like views) -->
+          <button v-if="view === 'terminal' || view === 'shell'"
             class="topbar-icon-btn"
-            @click="view = 'home'" title="主页">
-            {{ icons.home }}
+            @click="view = 'home'" title="返回主页">
+            <AppIcon name="home" />
+          </button>
+          <!-- Shell -->
+          <button class="topbar-icon-btn" :class="{ active: view === 'shell' }"
+            @click="openShell" title="临时终端">
+            <AppIcon name="terminal" />
           </button>
           <!-- Files -->
           <button class="topbar-icon-btn" :class="{ active: view === 'files' }"
             @click="toggleOverlay('files')" title="文件浏览">
-            {{ icons.files }}
+            <AppIcon name="folder" />
           </button>
           <!-- Settings -->
           <button class="topbar-icon-btn" :class="{ active: view === 'settings' }"
             @click="toggleOverlay('settings')" title="设置">
-            {{ icons.settings }}
+            <AppIcon name="settings" />
           </button>
           <!-- Help -->
           <button class="topbar-icon-btn" :class="{ active: view === 'help' }"
             @click="toggleOverlay('help')" title="帮助">
-            ?
+            <AppIcon name="help" />
           </button>
         </div>
       </header>
 
       <!-- Content -->
-      <div class="content" :class="{ 'is-terminal': view === 'terminal' }">
+      <div class="content" :class="{ 'is-terminal': view === 'terminal' || view === 'shell' }">
 
         <!-- ── Home: conversation list ───────────────────────────────── -->
         <div v-show="view === 'home'" class="home-view">
           <ConversationList
             :sessions="sessionList"
             :loading="!wsReady"
-            :icons="icons"
             @open="openSession"
             @new="view = 'new-session'"
             @kill="killSession"
@@ -136,8 +142,17 @@
         <!-- ── Files ─────────────────────────────────────────────────── -->
         <div v-show="view === 'files'" class="files-view">
           <FileBrowser
-            :initialPath="currentMeta?.workingDir || ''"
+            :initial-path="settings.fileBrowserDefaultPath || '/'"
             @close="toggleOverlay('files')"
+          />
+        </div>
+
+        <!-- ── Ephemeral shell ──────────────────────────────────────── -->
+        <div v-if="shellActive" v-show="view === 'shell'" class="shell-view">
+          <ShellTerminal
+            :theme="theme"
+            :initial-cwd="settings.shellDefaultCwd || '/'"
+            @close="closeShell"
           />
         </div>
 
@@ -166,7 +181,7 @@
           <div class="kc-msg">终止 <strong>{{ killConfirm.session?.name }}</strong>？会话将结束并退出终端。</div>
           <div class="kc-btns">
             <button class="kc-cancel" @click="killConfirm.show = false">{{ t.cancel }}</button>
-            <button class="kc-ok" @click="confirmKillAndExit">{{ t.stop_btn }} {{ icons.kill }}</button>
+            <button class="kc-ok" @click="confirmKillAndExit">{{ t.stop_btn }} <AppIcon name="stop" /></button>
           </div>
         </div>
       </div>
@@ -184,7 +199,9 @@ import NewConversation   from './components/NewConversation.vue';
 import SettingsPage      from './components/SettingsPage.vue';
 import HelpPage          from './components/HelpPage.vue';
 import FileBrowser       from './components/FileBrowser.vue';
-import { settings, COLOR_THEMES, getIcons } from './settings.js';
+import ShellTerminal     from './components/ShellTerminal.vue';
+import AppIcon           from './components/AppIcon.vue';
+import { settings, COLOR_THEMES } from './settings.js';
 import { useI18n } from './i18n.js';
 import { route, navigate } from './router.js';
 
@@ -193,7 +210,6 @@ const { t } = useI18n();
 // ── Themes ────────────────────────────────────────────────────────────────────
 const THEME_LIST = COLOR_THEMES;
 const theme  = computed(() => settings.colorTheme);
-const icons  = computed(() => getIcons(settings.colorTheme));
 function setTheme(id) { settings.colorTheme = id; }
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
@@ -414,6 +430,7 @@ const prevView     = ref('home');
 const logTarget    = ref(null);
 const switcherOpen = ref(false);
 const switcherRef  = ref(null);
+const shellActive  = ref(false);
 
 function openSession(s) {
   // Already have this session open
@@ -536,10 +553,22 @@ function openLog(s) {
   view.value = 'log';
 }
 
+function openShell() {
+  shellActive.value = true;
+  view.value = 'shell';
+  switcherOpen.value = false;
+}
+
+function closeShell() {
+  shellActive.value = false;
+  view.value = 'home';
+}
+
 function doLogout() {
   import('./api/index.js').then(({ logout }) => logout());
   authed.value = false;
   view.value = 'home';
+  shellActive.value = false;
   settings.username = '';
 }
 
@@ -547,6 +576,7 @@ function doLogout() {
 setUnauthorizedHandler(() => {
   authed.value = false;
   view.value = 'home';
+  shellActive.value = false;
   // 清理所有 WS 连接
   clearTimeout(reconnTimer);
   controlWS?.close();
@@ -941,6 +971,7 @@ body { font-family: 'JetBrains Mono', monospace; }
 .topbar-badge {
   font-family: 'JetBrains Mono', monospace; font-size: 10px;
   color: var(--neon); opacity: .7;
+  display: flex; align-items: center; gap: 3px;
 }
 
 .topbar-icon-btn {
@@ -1046,12 +1077,13 @@ body { font-family: 'JetBrains Mono', monospace; }
   max-height: calc(var(--vvh, 100dvh) - 44px);
 }
 
-.home-view, .new-view, .log-view, .settings-view, .help-view, .files-view {
+.home-view, .new-view, .log-view, .settings-view, .help-view, .files-view, .shell-view {
   flex: 1; overflow: auto; display: flex; flex-direction: column;
 }
 
 /* Terminal fills its parent */
-.terminal-view {
+.terminal-view,
+.shell-view {
   flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden;
 }
 </style>
