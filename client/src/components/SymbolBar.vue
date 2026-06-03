@@ -1,9 +1,11 @@
 <template>
   <div class="symbol-bar" :class="shellMode ? 'shell-mode' : 'cc-mode'">
-    <!-- CC 模式：单排 -->
-    <div v-if="!shellMode" class="symbol-scroll">
+    <!-- CC 模式：桌面单排；窄屏时上传/MODE 独占第一排 -->
+    <div v-if="!shellMode" class="symbol-scroll" :class="{ 'has-prefix': hasPrefixSlot }">
+      <slot name="prefix"></slot>
       <button v-for="sym in CC_SYMBOLS" :key="sym.key"
         class="sym-btn"
+        :class="`sym-btn--${sym.key}`"
         @click="onTap(sym)"
         @touchstart.prevent="onTouchStart(sym)"
         @touchend.prevent="onTouchEnd(sym)"
@@ -44,13 +46,15 @@
 </template>
 
 <script setup>
-import { computed, reactive } from 'vue';
+import { computed, reactive, useSlots } from 'vue';
 
 const props = defineProps({
   currentLine: { type: String, default: '' },
   mode: { type: String, default: 'auto' },
 });
 const emit = defineEmits(['input']);
+const slots = useSlots();
+const hasPrefixSlot = computed(() => Boolean(slots.prefix));
 
 const shellMode = computed(() => {
   if (props.mode === 'shell') return true;
@@ -60,7 +64,7 @@ const shellMode = computed(() => {
 
 // ── CC 模式：不含回车 ─────────────────────────────────────────────────────────
 const CC_SYMBOLS = [
-  { key: 'mode',  label: 'M',   value: '\x1b[Z' },
+  { key: 'mode',  label: 'MODE', value: '\x1b[Z' },
   { key: 'esc',   label: 'Esc', value: '\x1b' },
   { key: 'tab',   label: 'Tab', value: '\t' },
   { key: 'slash', label: '/',   value: '/' },
@@ -123,13 +127,15 @@ function onTouchEnd(sym) {
 
 <style scoped>
 .symbol-bar {
+  --symbol-button-height: 30px;
   flex-shrink: 0;
-  background: var(--bg2);
-  border-top: 1px solid var(--border);
-  padding: 5px 6px;
+  background: color-mix(in srgb, var(--panel) 90%, transparent);
+  border-top: 1px solid var(--hairline);
+  padding: 6px;
   display: flex;
   align-items: center;
   transition: border-color .2s, background .2s;
+  box-shadow: 0 -10px 24px color-mix(in srgb, #000000 18%, transparent);
 }
 /* Shell 模式：顶部边框用 neon2 */
 .symbol-bar.shell-mode {
@@ -142,6 +148,7 @@ function onTouchEnd(sym) {
   gap: 4px;
   flex: 1;
   align-items: center;
+  min-width: 0;
 }
 
 /* Shell 两排容器 */
@@ -160,18 +167,23 @@ function onTouchEnd(sym) {
 /* 基础按钮：全部跟随主题 */
 .sym-btn {
   flex: 1;
-  background: color-mix(in srgb, var(--neon) 6%, var(--bg3));
+  height: var(--symbol-button-height);
+  min-height: var(--symbol-button-height);
+  background: color-mix(in srgb, var(--neon) 6%, var(--panel2));
   border: 1px solid color-mix(in srgb, var(--neon) 20%, transparent);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   color: var(--neon);
   font-family: 'JetBrains Mono', monospace;
   font-size: 11px;
-  padding: 5px 2px;
+  padding: 0 2px;
   cursor: pointer;
   text-align: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   user-select: none;
   -webkit-user-select: none;
-  transition: background .12s, box-shadow .12s, color .15s, border-color .15s;
+  transition: background .12s, box-shadow .12s, color .15s, border-color .15s, transform .12s;
   touch-action: none;
   min-width: 0;
   white-space: nowrap;
@@ -179,13 +191,14 @@ function onTouchEnd(sym) {
 .sym-btn:active {
   background: color-mix(in srgb, var(--neon) 22%, transparent);
   box-shadow: 0 0 6px var(--glow);
+  transform: translateY(1px);
 }
 
 /* M 按钮：固定宽，强调色背景 */
-.cc-mode .sym-btn:first-child {
-  flex: 0 0 28px;
-  font-family: 'Syne', sans-serif;
-  font-size: 12px;
+.cc-mode .sym-btn--mode {
+  flex: 0 0 56px;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 10px;
   font-weight: 800;
   color: var(--neon);
   background: color-mix(in srgb, var(--neon) 14%, transparent);
@@ -196,7 +209,7 @@ function onTouchEnd(sym) {
 .cc-mode .sym-btn:last-child {
   color: var(--neon2);
   border-color: color-mix(in srgb, var(--neon2) 25%, transparent);
-  background: color-mix(in srgb, var(--neon2) 6%, var(--bg3));
+  background: color-mix(in srgb, var(--neon2) 6%, var(--panel2));
 }
 .cc-mode .sym-btn:last-child:active {
   background: color-mix(in srgb, var(--neon2) 20%, transparent);
@@ -207,11 +220,38 @@ function onTouchEnd(sym) {
 .shell-mode .sym-btn {
   color: var(--neon2);
   border-color: color-mix(in srgb, var(--neon2) 22%, transparent);
-  background: color-mix(in srgb, var(--neon2) 6%, var(--bg3));
+  background: color-mix(in srgb, var(--neon2) 6%, var(--panel2));
 }
 .shell-mode .sym-btn:active {
   background: color-mix(in srgb, var(--neon2) 20%, transparent);
   box-shadow: 0 0 6px color-mix(in srgb, var(--neon2) 40%, transparent);
+}
+
+@media (max-width: 700px) {
+  .symbol-bar {
+    --symbol-button-height: 29px;
+  }
+  .cc-mode .symbol-scroll.has-prefix {
+    display: grid;
+    grid-template-columns: repeat(18, minmax(0, 1fr));
+    align-items: stretch;
+  }
+  .cc-mode .symbol-scroll.has-prefix :slotted(*) {
+    grid-column: span 9;
+    height: var(--symbol-button-height);
+    min-height: var(--symbol-button-height);
+  }
+  .cc-mode .symbol-scroll.has-prefix .sym-btn {
+    height: var(--symbol-button-height);
+    min-height: var(--symbol-button-height);
+  }
+  .cc-mode .symbol-scroll.has-prefix .sym-btn--mode {
+    grid-column: span 9;
+    flex-basis: auto;
+  }
+  .cc-mode .symbol-scroll.has-prefix .sym-btn:not(.sym-btn--mode) {
+    grid-column: span 2;
+  }
 }
 </style>
 
@@ -222,9 +262,9 @@ function onTouchEnd(sym) {
   padding-bottom: env(safe-area-inset-bottom, 60px);
 }
 .sym-popup {
-  background: var(--bg2); border: 1px solid var(--border);
-  border-radius: 10px; display: flex; gap: 6px; padding: 10px;
-  box-shadow: 0 0 30px var(--glow), 0 8px 40px #00000080;
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: var(--radius); display: flex; gap: 6px; padding: 10px;
+  box-shadow: var(--shadow), 0 0 30px var(--glow);
   max-width: 90vw; flex-wrap: wrap; justify-content: center;
 }
 .sym-btn--variant { font-size: 13px; padding: 8px 16px; min-width: 44px; }

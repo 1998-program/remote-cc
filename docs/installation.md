@@ -144,6 +144,7 @@ remotecc restart
 ├── logs/          # PTY 输出日志（最多 9000 行）
 ├── sockets/       # Unix domain socket
 ├── sessions.json  # 会话元数据（每次启动清空）
+├── web-settings.json # Web 设置（默认目录、主题、终端偏好等）
 ├── server.lock    # 单实例锁
 └── local.token    # 本地认证 token（权限 600）
 ```
@@ -290,6 +291,7 @@ remotecc restart
 ├── logs/          # PTY output logs (max 9000 lines)
 ├── sockets/       # Unix domain sockets
 ├── sessions.json  # Session metadata (cleared on each restart)
+├── web-settings.json # Web settings (default dirs, theme, terminal preferences)
 ├── server.lock    # Single-instance lock
 └── local.token    # Local auth token (chmod 600)
 ```

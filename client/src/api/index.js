@@ -103,6 +103,12 @@ export const api = {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ currentPassword, newPassword }),
   }),
+  getSettings:        () => apiFetch('/api/settings'),
+  saveSettings:       (settings) => apiFetch('/api/settings', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ settings }),
+  }),
   getProjects:        (agent = 'claude') => apiFetch(`/api/projects?agent=${encodeURIComponent(agent)}`),
   getSessions:        (projectId, agent = 'claude') => apiFetch(`/api/sessions/${encodeURIComponent(projectId)}?agent=${encodeURIComponent(agent)}`),
   getSession:         (sessionId, agent = 'claude') => apiFetch(`/api/session/${encodeURIComponent(sessionId)}?agent=${encodeURIComponent(agent)}`),

@@ -164,53 +164,62 @@ function timeAgo(ts) {
 .cl-root {
   width: 100%; height: 100%;
   display: flex; flex-direction: column;
-  background: var(--bg);
+  background: transparent;
 }
 
 /* ── Header ────────────────────────────────── */
 .cl-header {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 18px 20px 12px;
+  padding: 16px 20px 13px;
   flex-shrink: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--hairline) 58%, transparent);
+  background: color-mix(in srgb, var(--panel) 76%, transparent);
+  box-shadow: inset 0 -1px 0 color-mix(in srgb, #ffffff 4%, transparent);
 }
 .cl-title {
-  font-family: 'Syne', sans-serif; font-size: 20px; font-weight: 800;
-  color: var(--text); letter-spacing: 0.5px;
+  font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 18px; font-weight: 800;
+  color: var(--text);
+  letter-spacing: .2px;
 }
 .cl-new-btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 7px;
-  background: color-mix(in srgb, var(--neon) 10%, transparent);
-  border: 1px solid var(--border); border-radius: 7px;
-  color: var(--neon); font-family: 'Syne', sans-serif;
-  font-size: 12px; font-weight: 700; letter-spacing: 1px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--neon) 16%, transparent), color-mix(in srgb, var(--neon) 8%, transparent));
+  border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
+  color: var(--neon); font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 12px; font-weight: 800;
   padding: 7px 14px; cursor: pointer;
-  transition: background .15s, box-shadow .15s;
+  transition: background .15s, box-shadow .15s, border-color .15s, transform .15s;
+  line-height: 1; overflow: visible; --app-icon-size: 14px;
 }
 .cl-new-btn:hover {
   background: color-mix(in srgb, var(--neon) 16%, transparent);
   box-shadow: 0 0 12px var(--glow);
+  transform: translateY(-1px);
 }
 
 /* ── Empty / loading ───────────────────────── */
 .cl-empty {
   flex: 1; display: flex; flex-direction: column;
   align-items: center; justify-content: center;
-  gap: 10px; padding: 40px 20px; text-align: center;
+  gap: 10px; padding: 42px 20px; text-align: center;
+  color: var(--muted);
 }
 .cl-spinner {
   font-size: 28px; color: var(--neon);
+  --app-icon-size: 28px;
 }
-.cl-empty-icon { font-size: 40px; color: var(--muted); opacity: .4; }
-.cl-empty-title { font-family: 'Syne', sans-serif; font-size: 16px; font-weight: 700; color: var(--text); }
+.cl-empty-icon { font-size: 40px; color: var(--muted); opacity: .7; --app-icon-size: 40px; }
+.cl-empty-title { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 16px; font-weight: 800; color: var(--text); }
 .cl-empty-sub   { font-size: 12px; color: var(--muted); }
 .cl-start-btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
   margin-top: 8px; background: transparent;
-  border: 1px solid var(--neon); border-radius: 7px;
-  color: var(--neon); font-family: 'Syne', sans-serif;
-  font-size: 13px; font-weight: 700; letter-spacing: 1.5px;
+  border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
+  color: var(--neon); font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 13px; font-weight: 800;
   padding: 10px 24px; cursor: pointer;
   transition: background .2s, box-shadow .2s;
+  line-height: 1; overflow: visible; --app-icon-size: 15px;
 }
 .cl-start-btn:hover {
   background: color-mix(in srgb, var(--neon) 8%, transparent);
@@ -220,29 +229,49 @@ function timeAgo(ts) {
 /* ── List ──────────────────────────────────── */
 .cl-list {
   flex: 1; overflow-y: auto;
-  padding: 0 12px 16px;
-  display: flex; flex-direction: column; gap: 6px;
+  padding: 12px;
+  display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; gap: 7px;
   scrollbar-width: thin; scrollbar-color: var(--muted) transparent;
 }
 
 .cl-item {
   display: flex; align-items: center; gap: 10px;
-  background: var(--bg2); border: 1px solid var(--border);
-  border-radius: 10px; padding: 12px 14px; cursor: pointer;
-  transition: border-color .15s, background .15s, box-shadow .15s;
+  width: 100%;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, #ffffff 3%, transparent), transparent),
+    color-mix(in srgb, var(--panel) 84%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
+  border-radius: var(--radius); padding: 12px 12px 12px 14px; cursor: pointer;
+  transition: border-color .15s, background .15s, box-shadow .15s, transform .15s;
   position: relative;
+  overflow: hidden;
+}
+.cl-item::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 8px; bottom: 8px;
+  width: 2px;
+  border-radius: 0 999px 999px 0;
+  background: color-mix(in srgb, var(--muted) 36%, transparent);
+}
+.cl-item:not(.dead)::before {
+  background: linear-gradient(180deg, var(--success), var(--neon2));
 }
 .cl-item:hover {
   border-color: color-mix(in srgb, var(--neon) 40%, transparent);
-  background: color-mix(in srgb, var(--neon) 4%, var(--bg2));
-  box-shadow: 0 0 0 1px var(--glow);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--neon) 7%, transparent), transparent),
+    color-mix(in srgb, var(--panel) 90%, transparent);
+  box-shadow: 0 0 0 1px var(--glow), 0 10px 24px #00000022;
+  transform: translateY(-1px);
 }
-.cl-item.dead { opacity: .55; }
+.cl-item.dead { opacity: .62; }
 
 .cl-status {
   width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; margin-top: 2px;
+  outline: 3px solid color-mix(in srgb, var(--panel2) 72%, transparent);
 }
-.cl-status.live { background: #a6e3a1; box-shadow: 0 0 6px #a6e3a1; }
+.cl-status.live { background: var(--success); box-shadow: 0 0 6px color-mix(in srgb, var(--success) 70%, transparent); }
 .cl-status.dead { background: var(--muted); }
 
 .cl-info { flex: 1; min-width: 0; }
@@ -251,30 +280,32 @@ function timeAgo(ts) {
   display: flex; align-items: center;
 }
 .cl-name {
-  font-family: 'JetBrains Mono', sans-serif; font-size: 13px; font-weight: 600;
+  font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 13px; font-weight: 700;
   color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .cl-name-input {
-  flex: 1; background: var(--bg); border: 1px solid var(--neon);
-  border-radius: 4px; color: var(--text);
-  font-family: 'Syne', sans-serif; font-size: 14px; font-weight: 700;
+  flex: 1; background: var(--input-bg); border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm); color: var(--text);
+  font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 13px; font-weight: 700;
   padding: 1px 6px; outline: none;
 }
 
 .cl-meta {
-  display: flex; gap: 8px; margin-top: 3px; align-items: center;
+  display: flex; gap: 8px; margin-top: 4px; align-items: center;
+  min-width: 0;
 }
 .cl-cwd {
   font-family: 'JetBrains Mono', monospace; font-size: 11px;
   color: var(--neon2); opacity: .7;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  min-width: 0;
 }
 .cl-agent {
   font-family: 'JetBrains Mono', monospace; font-size: 10px;
   color: var(--neon);
   background: color-mix(in srgb, var(--neon) 8%, transparent);
   border: 1px solid color-mix(in srgb, var(--neon) 20%, transparent);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   padding: 1px 5px;
   flex-shrink: 0;
 }
@@ -282,6 +313,7 @@ function timeAgo(ts) {
   display: inline-flex; align-items: center; gap: 3px;
   font-family: 'JetBrains Mono', monospace; font-size: 10px;
   color: var(--neon); opacity: .6; flex-shrink: 0;
+  line-height: 1; overflow: visible; --app-icon-size: 12px;
 }
 
 /* 右侧列：时间 + 操作按钮，同一行垂直居中 */
@@ -289,7 +321,7 @@ function timeAgo(ts) {
   display: flex;
   flex-direction: row;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   flex-shrink: 0;
 }
 .cl-time {
@@ -297,31 +329,49 @@ function timeAgo(ts) {
 }
 .cl-actions {
   display: flex; gap: 2px;
+  opacity: .76;
+  transition: opacity .15s;
 }
+.cl-item:hover .cl-actions { opacity: 1; }
 
 .cl-action {
-  background: none; border: none; cursor: pointer;
+  background: transparent; border: 1px solid transparent; cursor: pointer;
   color: var(--muted); padding: 6px 8px;
-  border-radius: 6px; transition: background .12s, color .12s;
+  border-radius: var(--radius-sm); transition: background .12s, color .12s, border-color .12s;
   min-width: 32px; display: flex; align-items: center; justify-content: center;
+  line-height: 1; overflow: visible; --app-icon-size: 13px;
 }
-.cl-act-icon { font-size: 13px; line-height: 1; }
-.cl-action:hover         { background: color-mix(in srgb, var(--neon) 10%, transparent); color: var(--text); }
-.cl-action-kill:hover    { background: color-mix(in srgb, #f9e2af 12%, transparent); color: #f9e2af; }
-.cl-action-del:hover     { background: color-mix(in srgb, #f38ba8 12%, transparent); color: #f38ba8; }
-.cl-action-close:hover   { background: color-mix(in srgb, #f38ba8 12%, transparent); color: #f38ba8; }
+.cl-act-icon { font-size: 13px; line-height: 1; --app-icon-size: 13px; }
+.cl-action:hover         { background: color-mix(in srgb, var(--neon) 10%, transparent); color: var(--text); border-color: var(--border); }
+.cl-action-kill:hover    { background: color-mix(in srgb, var(--warning) 12%, transparent); color: var(--warning); }
+.cl-action-del:hover,
+.cl-action-close:hover   { background: color-mix(in srgb, var(--danger) 12%, transparent); color: var(--danger); border-color: color-mix(in srgb, var(--danger) 30%, transparent); }
+
+@media (max-width: 560px) {
+  .cl-header { padding: 14px 14px 11px; }
+  .cl-list { padding: 9px; gap: 7px; }
+  .cl-item { align-items: flex-start; gap: 9px; padding: 11px 9px 11px 12px; }
+  .cl-right {
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 5px;
+  }
+  .cl-actions { opacity: 1; }
+  .cl-meta { flex-wrap: wrap; gap: 5px; }
+  .cl-cwd { max-width: 46vw; }
+}
 
 /* ── Confirm overlay ───────────────────────── */
 .cl-confirm-overlay {
   position: fixed; inset: 0; z-index: 300;
-  background: #00000070; backdrop-filter: blur(4px);
+  background: var(--overlay); backdrop-filter: blur(4px);
   display: flex; align-items: center; justify-content: center;
 }
 .cl-confirm-box {
-  background: var(--bg2); border: 1px solid var(--border);
-  border-radius: 12px; padding: 24px 28px;
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 24px 28px;
   width: min(340px, 88vw);
-  box-shadow: 0 0 40px var(--glow);
+  box-shadow: var(--shadow), 0 0 24px var(--glow);
   display: flex; flex-direction: column; gap: 18px;
 }
 .cl-confirm-msg {
@@ -329,16 +379,16 @@ function timeAgo(ts) {
 }
 .cl-confirm-btns { display: flex; gap: 10px; justify-content: flex-end; }
 .cl-confirm-cancel {
-  background: none; border: 1px solid var(--border); border-radius: 6px;
-  color: var(--muted); font-family: 'Syne', sans-serif; font-size: 12px;
+  background: none; border: 1px solid var(--border); border-radius: var(--radius-sm);
+  color: var(--muted); font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px;
   padding: 7px 16px; cursor: pointer; transition: border-color .15s;
 }
-.cl-confirm-cancel:hover { border-color: var(--neon); color: var(--text); }
+.cl-confirm-cancel:hover { border-color: var(--border-strong); color: var(--text); }
 .cl-confirm-ok {
-  background: color-mix(in srgb, #f38ba8 10%, transparent);
-  border: 1px solid #f38ba850; border-radius: 6px;
-  color: #f38ba8; font-family: 'Syne', sans-serif; font-size: 12px; font-weight: 700;
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--danger) 42%, transparent); border-radius: var(--radius-sm);
+  color: var(--danger); font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px; font-weight: 700;
   padding: 7px 16px; cursor: pointer; transition: background .15s;
 }
-.cl-confirm-ok:hover { background: color-mix(in srgb, #f38ba8 20%, transparent); }
+.cl-confirm-ok:hover { background: color-mix(in srgb, var(--danger) 18%, transparent); }
 </style>

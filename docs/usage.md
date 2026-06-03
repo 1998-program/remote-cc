@@ -53,8 +53,9 @@ Agent PTY（持续运行）
 
 #### 符号快捷键栏
 
+- 快捷键栏只在手机端显示，PC 端保留完整终端区域。
 - **CC 模式**（蓝色）：`M`（Shift+Tab）`Esc` `Tab` `/` `!` `↑↓←→` `⏎`
-- **SH 模式**（黄色，行首输入 `!` 自动切换）：两排 Linux 常用符号
+- **SH 模式**（黄色，行首输入 `!` 自动切换）：两排 Linux 常用符号；临时 Shell 终端始终使用 Shell 快捷键
 - `Ctrl+]` 在会话内断开回菜单
 
 #### 文件浏览器（右上角文件夹图标）
@@ -73,12 +74,12 @@ Agent PTY（持续运行）
 
 #### 设置页（右上角设置图标）
 
-- **外观**：UI 风格（Cyberpunk/Minimal/Glass）+ 9 套颜色主题
-- **终端**：字体/字号/行高/光标/回滚行数/符号栏
+- **外观**：9 种 UI 风格，深色 12 套 / 浅色 9 套颜色主题，6 种图标风格；默认 Studio + Aurora + Material
+- **终端**：字体（含 MesloLGS NF 系列）/字号/行高/光标/回滚行数/符号栏
 - **连接**：重连延迟
 - **远程控制**：文件浏览器默认目录、临时 Shell 默认目录、新建会话默认目录
 - **账户**：查看当前用户、修改 Web 登录密码、退出登录
-- **语言**：中文 / English
+- **语言**：中文 / English；设置页、帮助页、说明文案和图标提示会同步切换
 
 ---
 
@@ -215,8 +216,9 @@ Open `http://<server>:8310` in a browser and log in.
 
 #### Symbol Bar
 
+- The shortcut bar is shown only on mobile; desktop keeps the full terminal area.
 - **CC mode** (blue): `M`(Shift+Tab) `Esc` `Tab` `/` `!` `↑↓←→` `⏎`
-- **SH mode** (yellow, auto-switch when `!` is first char): two rows of Linux symbols
+- **SH mode** (yellow, auto-switch when `!` is first char): two rows of Linux symbols; the temporary Shell terminal always uses shell shortcuts
 - `Ctrl+]` detaches from session back to menu
 
 #### File Browser (folder icon, top right)
@@ -235,12 +237,14 @@ The terminal button opens a non-persistent shell PTY. It is useful for short ter
 
 #### Settings (settings icon, top right)
 
-- **Appearance**: UI style (Cyberpunk/Minimal/Glass) + 9 color themes
-- **Terminal**: font / size / line-height / cursor / scrollback / symbol bar
+- **Appearance**: 9 UI styles, 12 dark and 9 light color themes, 6 icon styles; defaults to Studio + Aurora + Material
+- **Terminal**: font (including MesloLGS NF family) / size / line-height / cursor / scrollback / symbol bar
 - **Connection**: reconnect delays
 - **Remote control**: file browser default path, temporary shell cwd, new-session default directory
 - **Account**: current user, Web login password change, sign out
-- **Language**: 中文 / English
+- **Language**: 中文 / English; settings, help, descriptions, and icon tooltips switch together
+
+Web settings are stored on the server in `~/.rcc/web-settings.json`, so default directories, themes, terminal preferences, and language survive RemoteCC restarts. Existing browser `localStorage` settings are migrated automatically the first time the backend settings file does not exist.
 
 ---
 
@@ -340,9 +344,13 @@ Displays a large-text banner and session list on launch. `rcc-tui` reads `~/.rcc
 
 **临时 Shell**：Web 顶栏新增通用终端入口，提供不持久化的普通 shell 终端；需要保持时建议使用 `tmux`。
 
-**统一图标**：Web 顶栏、文件管理器、设置页和操作按钮改为统一 CSS 线框图标。
+**图标与主题**：Web 顶栏、文件管理器、设置页和操作按钮使用统一 SVG 图标系统；默认 Material 风格，支持 6 种图标风格、9 种 UI 风格、深色 12 套 / 浅色 9 套配色。
 
 **设置增强**：设置页支持默认目录配置和 Web 登录密码修改。
+
+**设置持久化**：Web 设置会保存到后端 `~/.rcc/web-settings.json`，默认目录、主题、终端偏好和语言在 RemoteCC 重启后仍然有效。
+
+**帮助文档**：帮助页支持中英文切换和内嵌截图展示，移动端使用左侧章节抽屉。
 
 ### 2026-05-21
 

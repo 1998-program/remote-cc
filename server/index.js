@@ -9,6 +9,7 @@ const { httpAuth, wsAuth, loginHandler, changePasswordHandler } = require('./aut
 const { getProjects, getSessions, readSession } = require('./history');
 const { handleMessage, closeWS, listSessions, readLog, registerWS, unregisterWS } = require('./pty-manager');
 const { listDir, readFilePreview, statFile, createDirectory, writeUploadedFile, readDownloadFile } = require('./fs-handler');
+const { getSettingsHandler, saveSettingsHandler } = require('./web-settings');
 
 const PORT = parseInt(process.env.PORT || 3000);
 
@@ -65,6 +66,7 @@ app.post('/api/login', loginHandler);
 // ── 文档接口（无需 auth，供帮助页读取）────────────────────────────────────────
 const DOCS_DIR = path.join(__dirname, '..', 'docs');
 const ALLOWED_DOCS = ['usage.md', 'installation.md', 'api.md', 'architecture.md', 'development.md'];
+app.use('/docs/assets', express.static(path.join(DOCS_DIR, 'assets')));
 app.get('/docs/:name', (req, res) => {
   const name = req.params.name;
   if (!ALLOWED_DOCS.includes(name)) return res.status(404).json({ error: 'Not found' });
@@ -115,6 +117,8 @@ app.get('/api/session-log/:sessionId', (req, res) => {
 });
 
 app.post('/api/change-password', changePasswordHandler);
+app.get('/api/settings', getSettingsHandler);
+app.post('/api/settings', saveSettingsHandler);
 
 // ── 文件系统 API ───────────────────────────────────────────────────────────────
 app.get('/api/fs/list', (req, res) => {

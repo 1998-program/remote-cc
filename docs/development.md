@@ -47,7 +47,7 @@ remote-cc/
 │       ├── themes.js        # xterm.js 终端配色
 │       ├── i18n.js          # 中英文字典
 │       └── components/
-│           ├── AppIcon.vue          # 统一 CSS 线框图标
+│           ├── AppIcon.vue          # 统一 SVG 图标系统
 │           ├── Terminal.vue         # xterm.js 渲染（纯展示）
 │           ├── SymbolBar.vue        # CC/SH 双模式快捷键栏
 │           ├── ConversationList.vue # 首页会话列表
@@ -67,6 +67,12 @@ remote-cc/
 1. `client/src/themes.js` 添加 xterm 配色
 2. `client/src/settings.js` 的 `COLOR_THEMES` 数组添加主题条目
 3. `client/src/App.vue` 全局 CSS 添加 CSS 变量
+
+### 添加图标风格
+
+1. `client/src/settings.js` 的 `ICON_STYLES` 添加风格条目
+2. `client/src/components/AppIcon.vue` 添加对应 SVG 形态
+3. `client/src/i18n.js` 添加中英文说明
 
 ### 添加 WS 消息类型
 
@@ -132,7 +138,7 @@ remote-cc/
 │       ├── themes.js        # xterm.js color schemes
 │       ├── i18n.js          # zh/en dictionary
 │       └── components/
-│           ├── AppIcon.vue          # Unified CSS outline icons
+│           ├── AppIcon.vue          # Unified SVG icon system
 │           ├── Terminal.vue         # xterm.js renderer (pure display)
 │           ├── SymbolBar.vue        # CC/SH dual-mode symbol bar
 │           ├── ConversationList.vue # Home session list
@@ -152,6 +158,12 @@ remote-cc/
 1. Add xterm color scheme in `client/src/themes.js`
 2. Add an entry to `COLOR_THEMES` in `client/src/settings.js`
 3. Add CSS variables in the global `<style>` block in `client/src/App.vue`
+
+### Adding an Icon Style
+
+1. Add an entry to `ICON_STYLES` in `client/src/settings.js`
+2. Add the matching SVG shapes in `client/src/components/AppIcon.vue`
+3. Add zh/en descriptions in `client/src/i18n.js`
 
 ### Adding a WS Message Type
 

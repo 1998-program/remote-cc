@@ -19,6 +19,7 @@ const os      = require('os');
 const { v4: uuidv4 } = require('uuid');
 const { getProjects, getSessions, readSession } = require('./history');
 const { listDir, readFilePreview, statFile, createDirectory, writeUploadedFile, readDownloadFile } = require('./fs-handler');
+const { getSettingsHandler, saveSettingsHandler } = require('./web-settings');
 
 const APP_SOCK = '/tmp/rcc-app.sock';
 const RCC_DIR  = path.join(os.homedir(), '.rcc');
@@ -36,6 +37,7 @@ app.use(express.json());
 // Docs (no auth — proxy 已在转发前放行)
 const DOCS_DIR     = path.join(__dirname, '..', 'docs');
 const ALLOWED_DOCS = ['usage.md', 'installation.md', 'api.md', 'architecture.md', 'development.md'];
+app.use('/docs/assets', express.static(path.join(DOCS_DIR, 'assets')));
 app.get('/docs/:name', (req, res) => {
   const name = req.params.name;
   if (!ALLOWED_DOCS.includes(name)) return res.status(404).json({ error: 'Not found' });
@@ -76,6 +78,9 @@ app.get('/api/session/:sessionId',  (req, res) => { try { res.json(readSession(r
 
 // /api/active-sessions 和 /api/session-log 由 proxy 直接处理（pty-manager 在 proxy 进程）
 // app.js 不处理这两个端点；proxy.js 会在转发前拦截它们
+
+app.get('/api/settings', getSettingsHandler);
+app.post('/api/settings', saveSettingsHandler);
 
 // File system API
 app.get('/api/fs/list', (req, res) => {

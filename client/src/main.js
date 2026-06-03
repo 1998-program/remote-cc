@@ -11,6 +11,7 @@ function applyTheme() {
   const theme = getTheme(settings.colorTheme);
   html.setAttribute('data-theme',    settings.colorTheme);
   html.setAttribute('data-ui-style', settings.uiStyle);
+  html.setAttribute('data-icon-style', settings.iconStyle || 'sharp');
   // 浅色/深色切换
   if (theme.dark === false) {
     html.setAttribute('data-light', '');
@@ -22,3 +23,4 @@ function applyTheme() {
 applyTheme();
 watch(() => settings.colorTheme, applyTheme);
 watch(() => settings.uiStyle,    applyTheme);
+watch(() => settings.iconStyle,  applyTheme);

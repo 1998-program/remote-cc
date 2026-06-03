@@ -38,6 +38,32 @@ curl -X POST http://localhost:8310/api/change-password \
 
 ### REST API
 
+#### 获取/保存 Web 设置
+
+```
+GET /api/settings
+POST /api/settings
+```
+
+`POST /api/settings` 请求体：
+
+```json
+{
+  "settings": {
+    "fileBrowserDefaultPath": "/",
+    "shellDefaultCwd": "/",
+    "newConversationDefaultDir": "~",
+    "uiStyle": "studio",
+    "colorTheme": "aurora",
+    "iconStyle": "sharp",
+    "language": "zh",
+    "fontSize": 13
+  }
+}
+```
+
+设置会持久化到 `~/.rcc/web-settings.json`（权限 600）。默认外观为 Studio + Aurora + Material（`iconStyle: "sharp"`）。首次打开新版 Web 端时，如果后端尚无设置文件，前端会把当前 `localStorage` 设置迁移到后端。
+
 #### 获取活跃会话列表
 
 ```
@@ -225,6 +251,32 @@ The password is stored as a scrypt hash in `~/.rcc/auth.json`. After a successfu
 ---
 
 ### REST API
+
+#### Get / Save Web Settings
+
+```
+GET /api/settings
+POST /api/settings
+```
+
+`POST /api/settings` body:
+
+```json
+{
+  "settings": {
+    "fileBrowserDefaultPath": "/",
+    "shellDefaultCwd": "/",
+    "newConversationDefaultDir": "~",
+    "uiStyle": "studio",
+    "colorTheme": "aurora",
+    "iconStyle": "sharp",
+    "language": "en",
+    "fontSize": 13
+  }
+}
+```
+
+Settings are persisted to `~/.rcc/web-settings.json` (chmod 600). The default appearance is Studio + Aurora + Material (`iconStyle: "sharp"`). On first launch with no backend settings file, the Web client migrates the current `localStorage` settings to the backend.
 
 #### List Active Sessions
 

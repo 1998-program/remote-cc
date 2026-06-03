@@ -5,15 +5,16 @@ import { reactive, watch } from 'vue';
 
 const STORAGE_KEY = 'rcc_settings';
 
-const DEFAULTS = {
+export const DEFAULTS = {
   // ── 外观 ──────────────────────────────────────
-  uiStyle:       'default',   // 'default' | 'minimal' | 'glass'
-  colorTheme:    'cyber',     // 见 COLOR_THEMES
+  uiStyle:       'studio',    // 见 UI_STYLES
+  colorTheme:    'aurora',    // 见 COLOR_THEMES
+  iconStyle:     'sharp',     // 见 ICON_STYLES
   topbarHeight:  44,          // px
 
   // ── 终端 ──────────────────────────────────────
   fontSize:      13,          // px
-  fontFamily:    'jetbrains', // 'jetbrains' | 'fira' | 'mono' | 'cascadia'
+  fontFamily:    'jetbrains', // 见 FONT_FAMILIES
   lineHeight:    1.3,
   cursorStyle:   'block',     // 'block' | 'underline' | 'bar'
   cursorBlink:   true,
@@ -54,22 +55,94 @@ export function resetSettings() {
   Object.assign(settings, DEFAULTS);
 }
 
+export function snapshotSettings() {
+  return { ...settings };
+}
+
+export function applySettings(nextSettings) {
+  if (!nextSettings || typeof nextSettings !== 'object') return;
+  Object.assign(settings, { ...DEFAULTS, ...nextSettings });
+}
+
 // ── UI Style CSS class 映射 ───────────────────────────────────────────────────
 export const UI_STYLES = [
   {
     id:   'default',
-    name: 'Cyberpunk',
-    desc: '发光边框、霓虹色调、赛博风格',
+    name: 'Command',
+    desc: '深色控制台、清晰层级、细边线',
   },
   {
     id:   'minimal',
-    name: 'Minimal',
-    desc: '极简线条、无装饰、专注内容',
+    name: 'Focus',
+    desc: '低装饰、高密度、适合长时间操作',
   },
   {
     id:   'glass',
-    name: 'Glass',
-    desc: '毛玻璃质感、半透明层次',
+    name: 'Layered',
+    desc: '半透明面板、柔和阴影、更多空间感',
+  },
+  {
+    id:   'dense',
+    name: 'Compact',
+    desc: '高信息密度、收紧间距、适合高频操作',
+  },
+  {
+    id:   'studio',
+    name: 'Studio',
+    desc: '柔和分区、低噪声、适合长时间查看',
+  },
+  {
+    id:   'contrast',
+    name: 'Signal',
+    desc: '高对比边界、强焦点态、弱化装饰',
+  },
+  {
+    id:   'cyberpunk',
+    name: 'Cyberpunk',
+    desc: '保留原始霓虹网格、扫描线和强发光',
+  },
+  {
+    id:   'blueprint',
+    name: 'Blueprint',
+    desc: '工程蓝图感、细网格、冷静扫描',
+  },
+  {
+    id:   'ink',
+    name: 'Ink',
+    desc: '低饱和纸墨界面、弱阴影、清晰阅读',
+  },
+];
+
+export const ICON_STYLES = [
+  {
+    id: 'line',
+    name: 'Lucide',
+    desc: '默认线性图标，清晰均衡',
+  },
+  {
+    id: 'round',
+    name: 'Tabler',
+    desc: '圆角轮廓和柔和几何形态',
+  },
+  {
+    id: 'sharp',
+    name: 'Material',
+    desc: '直角折线和硬朗模块形态',
+  },
+  {
+    id: 'bold',
+    name: 'Hero',
+    desc: '实心块面和高识别剪影',
+  },
+  {
+    id: 'duo',
+    name: 'Phosphor',
+    desc: '轮廓叠加半填充层次',
+  },
+  {
+    id: 'mono',
+    name: 'Nerd',
+    desc: '终端字形感的极简符号',
   },
 ];
 
@@ -85,41 +158,89 @@ const ICON_NAMES = {
 export const COLOR_THEMES = [
   // ── 深色主题 ──────────────────────────────────
   {
-    id: 'cyber', name: 'Cyber', accent: '#00ffd5', dark: true,
+    id: 'cyber', name: 'Cyber', accent: '#7CFF6B', dark: true,
     icons: ICON_NAMES,
   },
   {
-    id: 'mocha', name: 'Mocha', accent: '#cba6f7', dark: true,
+    id: 'mocha', name: 'Graphite', accent: '#C4B5FD', dark: true,
     icons: ICON_NAMES,
   },
   {
-    id: 'gruvbox', name: 'Gruvbox', accent: '#fabd2f', dark: true,
+    id: 'gruvbox', name: 'Warp', accent: '#FFB86B', dark: true,
     icons: ICON_NAMES,
   },
   {
-    id: 'nord', name: 'Nord', accent: '#88c0d0', dark: true,
+    id: 'nord', name: 'Fjord', accent: '#7DD3FC', dark: true,
     icons: ICON_NAMES,
   },
   {
-    id: 'dracula', name: 'Dracula', accent: '#ff79c6', dark: true,
+    id: 'dracula', name: 'Ray', accent: '#FF6BAA', dark: true,
     icons: ICON_NAMES,
   },
   {
-    id: 'solarized', name: 'Solarized', accent: '#268bd2', dark: true,
+    id: 'solarized', name: 'Harbor', accent: '#2DD4BF', dark: true,
+    icons: ICON_NAMES,
+  },
+  {
+    id: 'carbon', name: 'Carbon', accent: '#DDE3EA', dark: true,
+    icons: ICON_NAMES,
+  },
+  {
+    id: 'ember', name: 'Ember', accent: '#FF7A3D', dark: true,
+    icons: ICON_NAMES,
+  },
+  {
+    id: 'aurora', name: 'Aurora', accent: '#22D3EE', dark: true,
+    icons: ICON_NAMES,
+  },
+  {
+    id: 'orchid', name: 'Orchid', accent: '#D946EF', dark: true,
+    icons: ICON_NAMES,
+  },
+  {
+    id: 'matrix', name: 'Matrix', accent: '#00FF87', dark: true,
+    icons: ICON_NAMES,
+  },
+  {
+    id: 'neon', name: 'Neon', accent: '#00E5FF', dark: true,
     icons: ICON_NAMES,
   },
 
   // ── 浅色主题 ──────────────────────────────────
   {
-    id: 'latte', name: 'Latte', accent: '#8839ef', dark: false,
+    id: 'latte', name: 'Canvas', accent: '#6D5EF6', dark: false,
     icons: ICON_NAMES,
   },
   {
-    id: 'paper', name: 'Paper', accent: '#1a73e8', dark: false,
+    id: 'paper', name: 'Ledger', accent: '#0E7490', dark: false,
     icons: ICON_NAMES,
   },
   {
-    id: 'day', name: 'Day', accent: '#0969da', dark: false,
+    id: 'day', name: 'Daybreak', accent: '#2563EB', dark: false,
+    icons: ICON_NAMES,
+  },
+  {
+    id: 'mist', name: 'Mist', accent: '#0891B2', dark: false,
+    icons: ICON_NAMES,
+  },
+  {
+    id: 'sage', name: 'Sage', accent: '#2F855A', dark: false,
+    icons: ICON_NAMES,
+  },
+  {
+    id: 'pearl', name: 'Pearl', accent: '#C026D3', dark: false,
+    icons: ICON_NAMES,
+  },
+  {
+    id: 'contrast', name: 'Contrast', accent: '#111827', dark: false,
+    icons: ICON_NAMES,
+  },
+  {
+    id: 'ivory', name: 'Ivory', accent: '#9A3412', dark: false,
+    icons: ICON_NAMES,
+  },
+  {
+    id: 'skyline', name: 'Skyline', accent: '#0369A1', dark: false,
     icons: ICON_NAMES,
   },
 ];
@@ -133,8 +254,11 @@ export function getIcons(themeId) {
 }
 
 export const FONT_FAMILIES = [
-  { id: 'jetbrains', name: 'JetBrains Mono', value: "'JetBrains Mono', monospace" },
-  { id: 'fira',      name: 'Fira Code',      value: "'Fira Code', monospace" },
-  { id: 'cascadia',  name: 'Cascadia Code',  value: "'Cascadia Code', monospace" },
-  { id: 'mono',      name: 'System Mono',    value: "'Courier New', monospace" },
+  { id: 'meslolgs',   name: 'MesloLGS NF',      value: "'MesloLGS NF', 'MesloLGS Nerd Font', 'MesloLGS Nerd Font Mono', monospace" },
+  { id: 'meslolgm',   name: 'MesloLGM NF',      value: "'MesloLGM NF', 'MesloLGM Nerd Font', 'MesloLGS NF', monospace" },
+  { id: 'meslolgl',   name: 'MesloLGL NF',      value: "'MesloLGL NF', 'MesloLGL Nerd Font', 'MesloLGS NF', monospace" },
+  { id: 'jetbrains',  name: 'JetBrains Mono',   value: "'JetBrains Mono', monospace" },
+  { id: 'fira',       name: 'Fira Code',        value: "'Fira Code', monospace" },
+  { id: 'cascadia',   name: 'Cascadia Code',    value: "'Cascadia Code', monospace" },
+  { id: 'mono',       name: 'System Mono',      value: "'Courier New', monospace" },
 ];

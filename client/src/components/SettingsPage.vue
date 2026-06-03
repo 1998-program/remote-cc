@@ -23,9 +23,10 @@
               <div class="sp-style-preview" :class="`preview-${s.id}`">
                 <div class="pv-topbar"></div>
                 <div class="pv-content">
+                  <div class="pv-rail"></div>
                   <div class="pv-line"></div>
                   <div class="pv-line short"></div>
-                  <div class="pv-line"></div>
+                  <div class="pv-line tiny"></div>
                 </div>
               </div>
               <div class="sp-style-name">{{ t[`style_${s.id}`] || s.name }}</div>
@@ -34,35 +35,79 @@
           </div>
         </div>
 
+        <div class="sp-field sp-field-row">
+          <label class="sp-label">{{ t.topbar_height }}</label>
+          <div class="sp-stepper">
+            <button class="sp-step-btn" @click="settings.topbarHeight = Math.max(38, settings.topbarHeight - 2)"><AppIcon name="minus" /></button>
+            <span class="sp-step-val">{{ settings.topbarHeight }}px</span>
+            <button class="sp-step-btn" @click="settings.topbarHeight = Math.min(64, settings.topbarHeight + 2)"><AppIcon name="plus" /></button>
+          </div>
+        </div>
+
+        <div class="sp-field">
+          <label class="sp-label">{{ t.icon_style }}</label>
+          <div class="sp-icon-style-grid">
+            <button
+              v-for="icon in ICON_STYLES"
+              :key="icon.id"
+              class="sp-icon-style-card"
+              :class="{ active: settings.iconStyle === icon.id }"
+              :data-icon-style="icon.id"
+              @click="settings.iconStyle = icon.id"
+            >
+              <span class="sp-icon-style-preview" aria-hidden="true">
+                <AppIcon name="home" :variant="icon.id" />
+                <AppIcon name="terminal" :variant="icon.id" />
+                <AppIcon name="folder" :variant="icon.id" />
+              </span>
+              <span class="sp-icon-style-text">
+                <span class="sp-icon-style-name">{{ icon.name }}</span>
+                <span class="sp-icon-style-desc">{{ t[`icon_${icon.id}_desc`] || icon.desc }}</span>
+              </span>
+              <AppIcon :name="settings.iconStyle === icon.id ? 'check' : 'settings'" :variant="icon.id" class="sp-icon-preview" />
+            </button>
+          </div>
+        </div>
+
         <!-- 颜色主题 -->
         <div class="sp-field">
           <label class="sp-label">{{ t.color_theme }}</label>
           <!-- 深色主题 -->
-          <div class="sp-theme-group-label">深色</div>
+          <div class="sp-theme-group-label">{{ t.dark_themes }}</div>
           <div class="sp-color-grid">
             <button
               v-for="ct in darkThemes" :key="ct.id"
               class="sp-color-card"
               :class="{ active: settings.colorTheme === ct.id }"
+              :data-theme="ct.id"
               @click="settings.colorTheme = ct.id"
             >
-              <span class="sp-color-dot" :style="{ background: ct.accent }"></span>
+              <span class="sp-color-preview" aria-hidden="true">
+                <span class="sp-color-dot"></span>
+                <span class="sp-color-pane"></span>
+                <span class="sp-color-line"></span>
+              </span>
               <span class="sp-color-name">{{ ct.name }}</span>
-              <AppIcon name="settings" class="sp-icon-preview" />
+              <AppIcon :name="settings.colorTheme === ct.id ? 'check' : 'settings'" class="sp-icon-preview" />
             </button>
           </div>
           <!-- 浅色主题 -->
-          <div class="sp-theme-group-label" style="margin-top:10px">浅色</div>
+          <div class="sp-theme-group-label" style="margin-top:10px">{{ t.light_themes }}</div>
           <div class="sp-color-grid">
             <button
               v-for="ct in lightThemes" :key="ct.id"
               class="sp-color-card sp-color-card-light"
               :class="{ active: settings.colorTheme === ct.id }"
+              :data-theme="ct.id"
               @click="settings.colorTheme = ct.id"
             >
-              <span class="sp-color-dot" :style="{ background: ct.accent }"></span>
-              <span class="sp-color-name" style="color:#333">{{ ct.name }}</span>
-              <AppIcon name="settings" class="sp-icon-preview" :style="{ color: ct.accent }" />
+              <span class="sp-color-preview" aria-hidden="true">
+                <span class="sp-color-dot"></span>
+                <span class="sp-color-pane"></span>
+                <span class="sp-color-line"></span>
+              </span>
+              <span class="sp-color-name">{{ ct.name }}</span>
+              <AppIcon :name="settings.colorTheme === ct.id ? 'check' : 'settings'" class="sp-icon-preview" />
             </button>
           </div>
         </div>
@@ -190,14 +235,14 @@
       <section class="sp-section">
         <div class="sp-section-title">{{ t.language }}</div>
         <div class="sp-field">
-          <div class="sp-color-grid">
+          <div class="sp-language-grid">
             <button
               v-for="lang in LANGUAGES" :key="lang.id"
-              class="sp-color-card"
+              class="sp-language-card"
               :class="{ active: settings.language === lang.id }"
               @click="settings.language = lang.id"
             >
-              <span class="sp-color-name">{{ lang.name }}</span>
+              <span class="sp-language-name">{{ lang.name }}</span>
             </button>
           </div>
         </div>
@@ -268,7 +313,7 @@
 
 <script setup>
 import { computed, reactive, ref } from 'vue';
-import { settings, UI_STYLES, COLOR_THEMES, FONT_FAMILIES, resetSettings } from '../settings.js';
+import { settings, UI_STYLES, ICON_STYLES, COLOR_THEMES, FONT_FAMILIES, resetSettings } from '../settings.js';
 import { useI18n } from '../i18n.js';
 import { api } from '../api/index.js';
 import AppIcon from './AppIcon.vue';
@@ -350,43 +395,57 @@ async function changePassword() {
 .sp-root {
   display: flex; flex-direction: column;
   width: 100%; height: 100%;
-  background: var(--bg); overflow: hidden;
+  background: transparent; overflow: hidden;
 }
 
 .sp-header {
-  padding: 16px 20px 10px;
-  border-bottom: 1px solid var(--border);
+  padding: 15px 20px 11px;
+  border-bottom: 1px solid var(--hairline);
   flex-shrink: 0;
+  background: color-mix(in srgb, var(--panel) 78%, transparent);
+  box-shadow: inset 0 -1px 0 color-mix(in srgb, #ffffff 4%, transparent);
 }
 .sp-title {
-  font-family: 'Syne', sans-serif; font-size: 18px; font-weight: 800;
-  color: var(--text); letter-spacing: 0.5px;
+  font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 18px; font-weight: 800;
+  color: var(--text);
 }
 
 .sp-body {
-  flex: 1; overflow-y: auto; padding: 8px 16px 32px;
-  display: flex; flex-direction: column; gap: 4px;
+  flex: 1; overflow-y: auto; padding: 12px 18px 34px;
+  display: flex; flex-direction: column; gap: 8px;
   scrollbar-width: thin; scrollbar-color: var(--muted) transparent;
+  width: min(1120px, 100%);
+  margin: 0 auto;
 }
 
 /* ── Section ─────────────────────────────────── */
 .sp-section {
-  padding: 16px 0 8px;
-  border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+  padding: 18px 0 16px;
+  border-bottom: 1px solid color-mix(in srgb, var(--hairline) 72%, transparent);
+  display: grid;
+  grid-template-columns: minmax(128px, 170px) minmax(0, 1fr);
+  column-gap: 24px;
+  row-gap: 12px;
 }
 .sp-section:last-child { border-bottom: none; }
 
 .sp-section-title {
-  font-family: 'Syne', sans-serif; font-size: 10px; font-weight: 700;
+  font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 10px; font-weight: 800;
   color: var(--muted); letter-spacing: 2px; text-transform: uppercase;
-  margin-bottom: 14px;
+  margin-bottom: 0;
+  padding-top: 3px;
 }
 
-.sp-field { margin-bottom: 14px; }
+.sp-field {
+  grid-column: 2;
+  margin-bottom: 2px;
+}
 .sp-field:last-child { margin-bottom: 0; }
 
 .sp-field-row {
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  min-height: 34px;
+  padding: 4px 0;
 }
 
 .sp-label {
@@ -402,21 +461,23 @@ async function changePassword() {
   display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
 }
 .sp-style-card {
-  background: var(--bg2); border: 1px solid var(--border);
-  border-radius: 10px; padding: 10px 8px 8px;
+  background: color-mix(in srgb, var(--panel) 82%, transparent); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 10px 8px 8px;
   cursor: pointer; text-align: left;
-  transition: border-color .15s, box-shadow .15s;
+  transition: border-color .15s, box-shadow .15s, background .15s, transform .15s;
   display: flex; flex-direction: column; gap: 6px;
 }
 .sp-style-card:hover {
   border-color: color-mix(in srgb, var(--neon) 40%, transparent);
+  background: color-mix(in srgb, var(--neon) 4%, var(--panel));
+  transform: translateY(-1px);
 }
 .sp-style-card.active {
-  border-color: var(--neon);
-  box-shadow: 0 0 0 1px var(--neon), 0 0 12px var(--glow);
+  border-color: var(--border-strong);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--neon) 32%, transparent), 0 0 14px var(--glow);
 }
 .sp-style-name {
-  font-family: 'Syne', sans-serif; font-size: 11px; font-weight: 700;
+  font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 11px; font-weight: 800;
   color: var(--text);
 }
 .sp-style-desc {
@@ -425,112 +486,357 @@ async function changePassword() {
 
 /* UI Style previews */
 .sp-style-preview {
-  border-radius: 6px; height: 60px; overflow: hidden;
+  border-radius: var(--radius-sm); height: 62px; overflow: hidden;
   display: flex; flex-direction: column;
 }
-/* Cyber: 霓虹发光 */
+/* Command: 深色控制台 */
 .preview-default {
-  background: #0d0d0d;
-  border: 1px solid #00ffd540;
-  box-shadow: 0 0 10px #00ffd520, inset 0 0 10px #00ffd508;
+  background: #070A08;
+  border: 1px solid #7CFF6B42;
+  box-shadow: inset 0 0 0 1px #FFFFFF05;
 }
 .preview-default .pv-topbar {
-  height: 9px; background: #111318;
-  border-bottom: 1px solid #00ffd530;
-  box-shadow: 0 1px 6px #00ffd520;
+  height: 10px; background: #0D1410;
+  border-bottom: 1px solid #7CFF6B26;
 }
-.preview-default .pv-line { height: 2px; background: #00ffd560; border-radius: 1px; margin: 3px 5px; box-shadow: 0 0 4px #00ffd540; }
+.preview-default .pv-line { height: 3px; background: #7CFF6B80; border-radius: 2px; margin: 5px 7px 0 21px; box-shadow: 0 0 4px #7CFF6B30; }
 .preview-default .pv-line.short { width: 45%; }
+.preview-default .pv-line.tiny { width: 28%; background: #43D9C880; }
 
-/* Minimal: 直角+无装饰 */
+/* Focus: 直角+低装饰 */
 .preview-minimal {
-  background: #1c1c1c;
-  border: 1px solid #444;
+  background: #101116;
+  border: 1px solid #555B66;
   border-radius: 0 !important;
 }
 .preview-minimal .pv-topbar {
-  height: 9px; background: #252525;
-  border-bottom: 1px solid #444;
+  height: 10px; background: #151721;
+  border-bottom: 1px solid #555B66;
   border-radius: 0;
 }
-.preview-minimal .pv-line { height: 2px; background: #777; border-radius: 0; margin: 3px 5px; }
+.preview-minimal .pv-line { height: 3px; background: #8A8F9D; border-radius: 0; margin: 5px 7px 0 21px; }
 .preview-minimal .pv-line.short { width: 45%; }
+.preview-minimal .pv-line.tiny { width: 28%; }
 
-/* Glass: 模糊+渐变 */
+/* Layered: 半透明层级 */
 .preview-glass {
-  background: linear-gradient(135deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 100%);
-  border: 1px solid rgba(255,255,255,0.18);
+  background: #111C16CC;
+  border: 1px solid rgba(255,255,255,0.16);
   backdrop-filter: blur(6px);
-  border-radius: 10px !important;
+  border-radius: 8px !important;
+  box-shadow: 0 8px 20px #00000040;
 }
 .preview-glass .pv-topbar {
-  height: 9px;
-  background: rgba(255,255,255,0.1);
+  height: 10px;
+  background: rgba(255,255,255,0.08);
   border-bottom: 1px solid rgba(255,255,255,0.12);
-  border-radius: 10px 10px 0 0;
+  border-radius: 8px 8px 0 0;
 }
-.preview-glass .pv-line { height: 2px; background: rgba(255,255,255,0.3); border-radius: 2px; margin: 3px 5px; }
+.pv-content {
+  position: relative;
+  flex: 1;
+  padding-top: 2px;
+}
+.pv-rail {
+  position: absolute;
+  left: 8px;
+  top: 8px;
+  bottom: 7px;
+  width: 5px;
+  border-radius: 2px;
+  background: color-mix(in srgb, currentColor 18%, transparent);
+}
+.preview-glass .pv-line { height: 3px; background: rgba(255,255,255,0.32); border-radius: 2px; margin: 5px 7px 0 21px; }
 .preview-glass .pv-line.short { width: 45%; }
+.preview-glass .pv-line.tiny { width: 28%; }
+
+/* Compact: 高密度小间距 */
+.preview-dense {
+  background: #0A0D11;
+  border: 1px solid #9CA3AF52;
+  border-radius: 5px !important;
+}
+.preview-dense .pv-topbar {
+  height: 7px; background: #161B22;
+  border-bottom: 1px solid #9CA3AF3A;
+}
+.preview-dense .pv-line { height: 2px; background: #E5E7EBB8; border-radius: 1px; margin: 4px 6px 0 18px; }
+.preview-dense .pv-line.short { width: 56%; }
+.preview-dense .pv-line.tiny { width: 36%; background: #A3E635B8; }
+
+/* Studio: 柔和分区 */
+.preview-studio {
+  background: linear-gradient(135deg, #102033, #111827);
+  border: 1px solid rgba(148, 163, 184, .28);
+  border-radius: 8px !important;
+  box-shadow: inset 0 0 18px rgba(125, 211, 252, .08);
+}
+.preview-studio .pv-topbar {
+  height: 11px; background: rgba(255,255,255,.07);
+  border-bottom: 1px solid rgba(148, 163, 184, .18);
+}
+.preview-studio .pv-line { height: 3px; background: rgba(226,232,240,.48); border-radius: 2px; margin: 6px 8px 0 22px; }
+.preview-studio .pv-line.short { width: 48%; }
+.preview-studio .pv-line.tiny { width: 30%; background: rgba(34,211,238,.55); }
+
+/* Signal: 高对比 */
+.preview-contrast {
+  background: #FAFAFA;
+  border: 2px solid #111827;
+  border-radius: 4px !important;
+}
+.preview-contrast .pv-topbar {
+  height: 10px; background: #111827;
+  border-bottom: 0;
+}
+.preview-contrast .pv-rail { background: #111827; }
+.preview-contrast .pv-line { height: 3px; background: #111827; border-radius: 0; margin: 5px 7px 0 21px; }
+.preview-contrast .pv-line.short { width: 45%; }
+.preview-contrast .pv-line.tiny { width: 28%; background: #1D4ED8; }
+
+/* Cyberpunk: 原始霓虹扫描线 */
+.preview-cyberpunk {
+  background:
+    repeating-linear-gradient(0deg, transparent 0 9px, rgba(124,255,107,.12) 10px),
+    linear-gradient(135deg, #050806, #0B1018);
+  border: 1px solid #7CFF6B66;
+  box-shadow: inset 0 0 12px #7CFF6B18, 0 0 10px #7CFF6B22;
+}
+.preview-cyberpunk .pv-topbar {
+  height: 10px; background: #0D1410;
+  border-bottom: 1px solid #43D9C855;
+}
+.preview-cyberpunk .pv-line { height: 3px; background: #7CFF6BCC; border-radius: 2px; margin: 5px 7px 0 21px; box-shadow: 0 0 5px #7CFF6B55; }
+.preview-cyberpunk .pv-line.short { width: 48%; background: #43D9C8CC; }
+.preview-cyberpunk .pv-line.tiny { width: 30%; background: #F5D76ECC; }
+
+/* Blueprint: 工程网格 */
+.preview-blueprint {
+  background:
+    linear-gradient(90deg, rgba(125,211,252,.16) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(125,211,252,.16) 1px, transparent 1px),
+    #071827;
+  background-size: 10px 10px;
+  border: 1px solid rgba(125,211,252,.55);
+  border-radius: 5px !important;
+}
+.preview-blueprint .pv-topbar {
+  height: 9px; background: rgba(125,211,252,.10);
+  border-bottom: 1px solid rgba(125,211,252,.35);
+}
+.preview-blueprint .pv-line { height: 2px; background: rgba(186,230,253,.78); border-radius: 1px; margin: 5px 7px 0 21px; }
+.preview-blueprint .pv-line.short { width: 52%; }
+.preview-blueprint .pv-line.tiny { width: 34%; background: rgba(34,211,238,.85); }
+
+/* Ink: 纸墨低噪声 */
+.preview-ink {
+  background: #F8F7F2;
+  border: 1px solid #2A241C33;
+  border-radius: 8px !important;
+}
+.preview-ink .pv-topbar {
+  height: 10px; background: #ECE7DA;
+  border-bottom: 1px solid #2A241C22;
+}
+.preview-ink .pv-rail { background: #2A241C33; }
+.preview-ink .pv-line { height: 3px; background: #2A241C99; border-radius: 2px; margin: 5px 7px 0 21px; }
+.preview-ink .pv-line.short { width: 46%; }
+.preview-ink .pv-line.tiny { width: 29%; background: #9A341299; }
 
 /* ── Color grid ──────────────────────────────── */
 .sp-color-grid {
   display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px;
 }
 .sp-color-card {
-  display: flex; align-items: center; gap: 8px;
-  background: var(--bg2); border: 1px solid var(--border);
-  border-radius: 7px; padding: 8px 10px; cursor: pointer;
-  transition: border-color .15s, box-shadow .15s;
+  display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; align-items: center; gap: 8px;
+  background: color-mix(in srgb, var(--panel) 82%, transparent); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 8px 10px; cursor: pointer;
+  transition: border-color .15s, box-shadow .15s, background .15s, transform .15s;
+  color: var(--text);
 }
-.sp-color-card:hover { border-color: color-mix(in srgb, var(--neon) 40%, transparent); }
+.sp-color-card:hover {
+  border-color: color-mix(in srgb, var(--neon) 40%, transparent);
+  background: color-mix(in srgb, var(--neon) 4%, var(--panel));
+  transform: translateY(-1px);
+}
 .sp-color-card.active {
-  border-color: var(--neon);
-  box-shadow: 0 0 0 1px var(--neon);
+  border-color: var(--border-strong);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--neon) 28%, transparent);
 }
-/* 浅色主题卡片：白底 */
-.sp-color-card-light {
-  background: #f5f5f5 !important;
-  border-color: #ddd !important;
-}
-.sp-color-card-light:hover { border-color: #aaa !important; }
-.sp-color-card-light.active { border-color: #666 !important; box-shadow: 0 0 0 1px #666 !important; }
 
+.sp-color-preview {
+  position: relative;
+  width: 32px;
+  height: 24px;
+  border-radius: 5px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  overflow: hidden;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, #ffffff 5%, transparent);
+}
 .sp-color-dot {
-  width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+  position: absolute;
+  left: 5px;
+  top: 5px;
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--neon);
+}
+.sp-color-pane {
+  position: absolute;
+  right: 4px;
+  top: 5px;
+  width: 13px;
+  height: 13px;
+  border-radius: 3px;
+  background: var(--panel2);
+  border: 1px solid var(--border);
+}
+.sp-color-line {
+  position: absolute;
+  left: 5px;
+  bottom: 5px;
+  width: 14px;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--neon2);
 }
 .sp-theme-group-label {
-  font-family: 'Syne', sans-serif; font-size: 9px; font-weight: 700;
+  font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 9px; font-weight: 800;
   letter-spacing: 2px; color: var(--muted); text-transform: uppercase;
   margin-bottom: 6px;
 }
 .sp-icon-preview {
   margin-left: auto; font-size: 14px; flex-shrink: 0;
   color: var(--neon); opacity: .8;
+  line-height: 1; overflow: visible; --app-icon-size: 14px;
 }
 .sp-color-name {
   font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Language grid ───────────────────────────── */
+.sp-language-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 160px));
+  gap: 8px;
+}
+.sp-language-card {
+  min-width: 0;
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--panel) 82%, transparent);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  padding: 8px 14px;
+  cursor: pointer;
+  transition: border-color .15s, box-shadow .15s, background .15s, transform .15s;
+}
+.sp-language-card:hover {
+  border-color: color-mix(in srgb, var(--neon) 40%, transparent);
+  background: color-mix(in srgb, var(--neon) 4%, var(--panel));
+  transform: translateY(-1px);
+}
+.sp-language-card.active {
+  border-color: var(--border-strong);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--neon) 28%, transparent);
+}
+.sp-language-name {
+  display: block;
+  max-width: 100%;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  color: var(--text);
+  line-height: 1;
+  white-space: nowrap;
+}
+
+/* ── Icon style grid ─────────────────────────── */
+.sp-icon-style-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.sp-icon-style-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  background: color-mix(in srgb, var(--panel) 82%, transparent);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  padding: 9px 10px;
+  cursor: pointer;
+  transition: border-color .15s, box-shadow .15s, background .15s, transform .15s;
+}
+.sp-icon-style-card:hover {
+  border-color: color-mix(in srgb, var(--neon) 40%, transparent);
+  background: color-mix(in srgb, var(--neon) 4%, var(--panel));
+  transform: translateY(-1px);
+}
+.sp-icon-style-card.active {
+  border-color: var(--border-strong);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--neon) 28%, transparent);
+}
+.sp-icon-style-preview {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--neon);
+  --app-icon-size: 15px;
+}
+.sp-icon-style-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: left;
+}
+.sp-icon-style-name {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sp-icon-style-desc {
+  font-size: 10px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* ── Select ──────────────────────────────────── */
 .sp-select {
-  background: var(--bg2); border: 1px solid var(--border);
-  border-radius: 6px; color: var(--text);
+  background: var(--input-bg); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); color: var(--text);
   font-family: 'JetBrains Mono', monospace; font-size: 12px;
   padding: 6px 10px; outline: none; cursor: pointer;
-  transition: border-color .15s;
+  transition: border-color .15s, box-shadow .15s;
 }
-.sp-select:focus { border-color: var(--neon); }
+.sp-select:focus {
+  border-color: var(--border-strong);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--neon) 8%, transparent);
+}
 
 .sp-input {
   width: 100%;
-  background: var(--bg2); border: 1px solid var(--border);
-  border-radius: 6px; color: var(--text);
+  background: var(--input-bg); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); color: var(--text);
   font-family: 'JetBrains Mono', monospace; font-size: 12px;
-  padding: 7px 10px; outline: none;
+  padding: 8px 10px; outline: none;
   transition: border-color .15s, box-shadow .15s;
 }
 .sp-input:focus {
-  border-color: var(--neon);
+  border-color: var(--border-strong);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--neon) 8%, transparent);
 }
 .sp-input::placeholder {
@@ -543,15 +849,16 @@ async function changePassword() {
 .sp-icon-btn {
   width: 32px; height: 31px;
   display: inline-flex; align-items: center; justify-content: center;
-  background: var(--bg2); border: 1px solid var(--border);
-  border-radius: 6px; color: var(--muted);
+  background: var(--panel2); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); color: var(--muted);
   cursor: pointer; flex-shrink: 0;
   transition: color .12s, border-color .12s, background .12s;
+  line-height: 1; overflow: visible; --app-icon-size: 15px;
 }
 .sp-icon-btn:hover,
 .sp-icon-btn.active {
   color: var(--neon);
-  border-color: var(--neon);
+  border-color: var(--border-strong);
   background: color-mix(in srgb, var(--neon) 8%, transparent);
 }
 .sp-password-grid {
@@ -567,16 +874,17 @@ async function changePassword() {
 .sp-primary-btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 7px;
   background: color-mix(in srgb, var(--neon) 10%, transparent);
-  border: 1px solid color-mix(in srgb, var(--neon) 55%, transparent);
-  border-radius: 7px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
   color: var(--neon);
-  font-family: 'Syne', sans-serif; font-size: 12px; font-weight: 700;
+  font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px; font-weight: 800;
   padding: 8px 16px; cursor: pointer;
   transition: background .15s, border-color .15s, opacity .15s;
+  line-height: 1; overflow: visible; --app-icon-size: 14px;
 }
 .sp-primary-btn:hover:not(:disabled) {
   background: color-mix(in srgb, var(--neon) 16%, transparent);
-  border-color: var(--neon);
+  border-color: var(--border-strong);
 }
 .sp-primary-btn:disabled {
   opacity: .5; cursor: not-allowed;
@@ -585,8 +893,8 @@ async function changePassword() {
   font-family: 'JetBrains Mono', monospace;
   font-size: 11px;
 }
-.sp-status.ok { color: #a6e3a1; }
-.sp-status.err { color: #f38ba8; }
+.sp-status.ok { color: var(--success); }
+.sp-status.err { color: var(--danger); }
 
 /* ── Stepper ─────────────────────────────────── */
 .sp-stepper {
@@ -594,12 +902,13 @@ async function changePassword() {
 }
 .sp-step-btn {
   width: 26px; height: 26px;
-  background: var(--bg2); border: 1px solid var(--border);
-  border-radius: 5px; color: var(--text); font-size: 14px;
+  background: var(--panel2); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); color: var(--text); font-size: 14px;
   cursor: pointer; display: flex; align-items: center; justify-content: center;
   transition: background .12s, border-color .12s;
+  line-height: 1; overflow: visible; --app-icon-size: 13px;
 }
-.sp-step-btn:hover { background: color-mix(in srgb, var(--neon) 10%, transparent); border-color: var(--neon); }
+.sp-step-btn:hover { background: color-mix(in srgb, var(--neon) 10%, transparent); border-color: var(--border-strong); }
 .sp-step-val {
   font-family: 'JetBrains Mono', monospace; font-size: 12px;
   color: var(--text); min-width: 52px; text-align: center;
@@ -618,12 +927,13 @@ async function changePassword() {
 .sp-toggle input { display: none; }
 .sp-toggle-track {
   width: 36px; height: 20px; border-radius: 10px;
-  background: var(--bg3); border: 1px solid var(--border);
-  position: relative; transition: background .2s, border-color .2s;
+  background: var(--panel3); border: 1px solid var(--border);
+  position: relative; transition: background .2s, border-color .2s, box-shadow .2s;
 }
 .sp-toggle input:checked + .sp-toggle-track {
   background: color-mix(in srgb, var(--neon) 30%, transparent);
-  border-color: var(--neon);
+  border-color: var(--border-strong);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--neon) 18%, transparent);
 }
 .sp-toggle-thumb {
   position: absolute; width: 14px; height: 14px; border-radius: 50%;
@@ -637,22 +947,51 @@ async function changePassword() {
 
 /* ── Buttons ─────────────────────────────────── */
 .sp-danger-btn {
-  background: color-mix(in srgb, #f38ba8 8%, transparent);
-  border: 1px solid #f38ba840; border-radius: 7px;
-  color: #f38ba8; font-family: 'Syne', sans-serif; font-size: 12px; font-weight: 700;
-  padding: 8px 18px; cursor: pointer; transition: background .15s;
+  background: color-mix(in srgb, var(--danger) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--danger) 34%, transparent); border-radius: var(--radius-sm);
+  color: var(--danger); font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px; font-weight: 800;
+  padding: 8px 18px; cursor: pointer; transition: background .15s, border-color .15s;
 }
-.sp-danger-btn:hover { background: color-mix(in srgb, #f38ba8 16%, transparent); }
+.sp-danger-btn:hover { background: color-mix(in srgb, var(--danger) 16%, transparent); border-color: color-mix(in srgb, var(--danger) 52%, transparent); }
 
 .sp-ghost-btn {
   background: none; border: 1px solid var(--border);
-  border-radius: 7px; color: var(--muted);
-  font-family: 'Syne', sans-serif; font-size: 12px;
+  border-radius: var(--radius-sm); color: var(--muted);
+  font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px;
   padding: 8px 18px; cursor: pointer; transition: border-color .15s, color .15s;
 }
-.sp-ghost-btn:hover { border-color: var(--neon); color: var(--text); }
+.sp-ghost-btn:hover { border-color: var(--border-strong); color: var(--text); }
 
 @media (max-width: 760px) {
+  .sp-header { padding: 14px 16px 10px; }
+  .sp-body { padding: 10px 16px 28px; }
+  .sp-section {
+    display: block;
+    padding: 16px 0 14px;
+  }
+  .sp-section-title { margin-bottom: 14px; padding-top: 0; }
+  .sp-field { margin-bottom: 14px; }
+  .sp-field-row { min-height: 0; padding: 0; }
+  .sp-color-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .sp-language-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .sp-icon-style-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .sp-style-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .sp-password-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 520px) {
+  .sp-style-grid { grid-template-columns: 1fr; }
+  .sp-field-row {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .sp-select,
+  .sp-stepper,
+  .sp-radio-group {
+    width: 100%;
+  }
+  .sp-icon-style-grid { grid-template-columns: 1fr; }
+  .sp-radio-group { flex-wrap: wrap; }
 }
 </style>

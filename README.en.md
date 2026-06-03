@@ -37,17 +37,17 @@ This is not screenshots or log forwarding. It is **true bidirectional real-time 
 - **Session manager** — run `remotecc` on the server to get a visual menu for managing sessions
 - **Detach shortcut** — `Ctrl+]` goes back to the menu without killing the agent
 - **Mobile-optimized** — responsive UI, comfortable to use on a phone
-- **Rich themes** — 9 color themes + 3 UI styles
+- **Customizable appearance** — 9 UI styles, dark/light color themes, and multiple icon styles; defaults to Studio + Aurora + Material
 
 ---
 
 ## Upload Files / Images to Agent
 
-The web terminal toolbar provides an upload button that supports three ways to pass files to Claude Code or Codex:
+The web terminal supports three ways to pass files to Claude Code or Codex:
 
 | Method | How |
 |--------|-----|
-| Click to select | Click the upload button below the terminal, choose any file or image |
+| Click to select | On mobile, tap the upload button in the terminal shortcut bar and choose any file or image |
 | Drag & drop | Drag files directly onto the terminal area |
 | Paste image | Screenshot then Ctrl+V (auto-uploads) |
 
@@ -155,12 +155,12 @@ Inside any session: **`Ctrl+]`** goes back to the menu without killing the agent
 
 ### 2026-06-03
 
+- **Web console enhancements**: directory picker for new sessions, plus a file browser with `/` root access, folder creation, upload/download, and path copy
+- **Temporary shell**: adds a non-persistent shell terminal in the Web top bar, preferring `zsh` by default
+- **Mobile terminal**: shortcut bars are mobile-only; Shell mode uses dedicated shell shortcuts
+- **Appearance and language**: defaults to Studio + Aurora + Material, with 9 UI styles, dark/light color themes, 6 icon styles, and complete zh/en switching
+- **Settings persistence**: Web settings are saved to `~/.rcc/web-settings.json`, including default paths, themes, terminal preferences, and language
 - **TUI detach fix**: fixes first `Ctrl+]` detach after creating a session from `rcc-tui`
-- **New task directory picker**: Web new-session flow can choose the working directory from a directory picker
-- **File browser**: opens from `/` by default, supports creating folders, click/drag upload into the current directory, and downloading files
-- **Temporary shell**: adds a non-persistent terminal entry in the Web top bar
-- **Unified icons**: Web top bar, file browser, settings page, and action buttons now use one CSS outline icon system
-- **Settings enhancements**: configure default directories and change the Web login password
 
 ### 2026-05-21
 

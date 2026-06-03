@@ -324,50 +324,66 @@ function fmtDate(iso) {
 .nc-root {
   flex: 1; display: flex; flex-direction: column;
   overflow: hidden;
+  background: transparent;
 }
 
 /* ── Tabs ──────────────────────────────────── */
 .nc-tabs {
-  display: flex; gap: 0; flex-shrink: 0;
-  border-bottom: 1px solid var(--border);
-  padding: 0 16px;
+  display: flex; gap: 4px; flex-shrink: 0;
+  border-bottom: 1px solid var(--hairline);
+  padding: 8px 16px;
+  background: color-mix(in srgb, var(--panel) 76%, transparent);
 }
 .nc-tab {
-  background: none; border: none; cursor: pointer;
-  font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 700;
-  color: var(--muted); padding: 12px 16px; position: relative;
-  transition: color .15s; letter-spacing: 0.5px;
+  background: transparent; border: 1px solid transparent; cursor: pointer;
+  border-radius: var(--radius-sm);
+  font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 13px; font-weight: 800;
+  color: var(--muted); padding: 7px 14px; position: relative;
+  transition: color .15s, background .15s, border-color .15s;
 }
-.nc-tab.active { color: var(--neon); }
+.nc-tab:hover { color: var(--text); background: color-mix(in srgb, var(--neon) 5%, transparent); border-color: var(--border); }
+.nc-tab.active {
+  color: var(--neon);
+  background: color-mix(in srgb, var(--neon) 10%, transparent);
+  border-color: var(--border-strong);
+}
 .nc-tab.active::after {
-  content: ''; position: absolute; bottom: -1px; left: 0; right: 0;
-  height: 2px; background: var(--neon);
-  border-radius: 2px 2px 0 0;
+  content: none;
 }
 
 /* ── New card ──────────────────────────────── */
 .nc-card {
-  padding: 20px 16px;
+  padding: 22px 18px 28px;
   display: flex; flex-direction: column; gap: 18px;
   overflow-y: auto; flex: 1;
+  width: min(920px, 100%);
+  margin: 0 auto;
+  background: transparent;
 }
 
-.nc-field { display: flex; flex-direction: column; gap: 8px; }
+.nc-field {
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, var(--border) 64%, transparent);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--panel) 54%, transparent);
+}
 .nc-label {
-  font-family: 'Syne', sans-serif; font-size: 11px; font-weight: 600;
+  font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 11px; font-weight: 800;
   color: var(--muted); letter-spacing: 1.5px; text-transform: uppercase;
 }
 .nc-hint { font-weight: 400; opacity: .6; }
 
 .nc-input {
-  width: 100%; background: var(--bg); color: var(--text);
-  border: 1px solid color-mix(in srgb, var(--neon) 20%, transparent);
-  border-radius: 7px; font-family: 'JetBrains Mono', monospace; font-size: 13px;
+  width: 100%; background: var(--input-bg); color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm); font-family: 'JetBrains Mono', monospace; font-size: 13px;
   padding: 10px 12px; outline: none;
-  transition: border-color .2s, box-shadow .2s;
+  transition: border-color .2s, box-shadow .2s, background .2s;
 }
 .nc-input:focus {
-  border-color: var(--neon);
+  border-color: var(--border-strong);
+  background: color-mix(in srgb, var(--input-bg) 82%, var(--panel2));
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--neon) 10%, transparent);
 }
 .nc-input::placeholder { color: color-mix(in srgb, var(--muted) 50%, transparent); }
@@ -381,9 +397,9 @@ function fmtDate(iso) {
 }
 .nc-browse-btn {
   width: 40px; height: 40px; flex-shrink: 0;
-  background: var(--bg3);
-  border: 1px solid color-mix(in srgb, var(--neon) 20%, transparent);
-  border-radius: 7px;
+  background: var(--panel2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
   color: var(--neon2);
   cursor: pointer;
   font-family: 'JetBrains Mono', monospace;
@@ -391,11 +407,12 @@ function fmtDate(iso) {
   line-height: 1;
   display: inline-flex; align-items: center; justify-content: center;
   transition: background .12s, border-color .12s, color .12s, box-shadow .12s;
+  overflow: visible; --app-icon-size: 17px;
 }
 .nc-browse-btn:hover,
 .nc-browse-btn.active {
   background: color-mix(in srgb, var(--neon) 10%, transparent);
-  border-color: var(--neon);
+  border-color: var(--border-strong);
   color: var(--neon);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--neon) 8%, transparent);
 }
@@ -403,53 +420,58 @@ function fmtDate(iso) {
 .nc-quickpicks { display: flex; gap: 6px; flex-wrap: wrap; }
 .nc-agent-picker { display: flex; gap: 8px; flex-wrap: wrap; }
 .nc-agent {
-  background: var(--bg3); border: 1px solid var(--border);
-  border-radius: 7px; color: var(--muted); font-family: 'Syne', sans-serif;
-  font-size: 12px; font-weight: 700; padding: 7px 12px; cursor: pointer;
-  transition: background .12s, border-color .12s, color .12s;
+  background: color-mix(in srgb, var(--panel2) 86%, transparent); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); color: var(--muted); font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 12px; font-weight: 800; padding: 7px 12px; cursor: pointer;
+  transition: background .12s, border-color .12s, color .12s, transform .12s;
 }
 .nc-agent:hover {
   border-color: color-mix(in srgb, var(--neon) 30%, transparent);
   color: var(--text);
+  transform: translateY(-1px);
 }
 .nc-agent.active {
   background: color-mix(in srgb, var(--neon) 10%, transparent);
-  border-color: var(--neon);
+  border-color: var(--border-strong);
   color: var(--neon);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--neon) 14%, transparent);
 }
 .nc-pick {
-  background: var(--bg3); border: 1px solid var(--border);
-  border-radius: 5px; color: var(--neon2); font-family: 'JetBrains Mono', monospace;
+  background: color-mix(in srgb, var(--panel2) 76%, transparent); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); color: var(--neon2); font-family: 'JetBrains Mono', monospace;
   font-size: 11px; padding: 3px 10px; cursor: pointer;
-  transition: background .12s, border-color .12s;
+  transition: background .12s, border-color .12s, color .12s;
 }
 .nc-pick:hover {
   background: color-mix(in srgb, var(--neon) 8%, transparent);
   border-color: color-mix(in srgb, var(--neon) 30%, transparent);
+  color: var(--neon);
 }
 
 .nc-actions {
   display: flex; gap: 10px; justify-content: flex-end; margin-top: auto; padding-top: 4px;
 }
 .nc-cancel {
-  background: none; border: 1px solid var(--border); border-radius: 7px;
-  color: var(--muted); font-family: 'Syne', sans-serif; font-size: 12px;
+  background: none; border: 1px solid var(--border); border-radius: var(--radius-sm);
+  color: var(--muted); font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px;
   padding: 9px 18px; cursor: pointer; transition: border-color .15s, color .15s;
 }
-.nc-cancel:hover { border-color: var(--neon); color: var(--text); }
+.nc-cancel:hover { border-color: var(--border-strong); color: var(--text); }
 
 .nc-start {
   display: inline-flex; align-items: center; justify-content: center; gap: 7px;
-  background: color-mix(in srgb, var(--neon) 10%, transparent);
-  border: 1px solid var(--neon); border-radius: 7px;
-  color: var(--neon); font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 800;
-  letter-spacing: 1px; padding: 9px 20px; cursor: pointer;
-  transition: background .2s, box-shadow .2s;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--neon) 16%, transparent), color-mix(in srgb, var(--neon) 8%, transparent));
+  border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
+  color: var(--neon); font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 13px; font-weight: 800;
+  padding: 9px 20px; cursor: pointer;
+  transition: background .2s, box-shadow .2s, transform .15s;
   white-space: nowrap;
+  line-height: 1; overflow: visible; --app-icon-size: 15px;
 }
 .nc-start:hover {
   background: color-mix(in srgb, var(--neon) 18%, transparent);
   box-shadow: 0 0 16px var(--glow);
+  transform: translateY(-1px);
 }
 .nc-start-sm { font-size: 12px; padding: 7px 14px; }
 
@@ -457,11 +479,13 @@ function fmtDate(iso) {
 .nc-resume {
   flex: 1; overflow-y: auto; display: flex; flex-direction: column;
   padding: 8px 0;
+  background: transparent;
   scrollbar-width: thin; scrollbar-color: var(--muted) transparent;
 }
 .nc-resume-toolbar {
   padding: 8px 16px 12px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--hairline);
+  background: color-mix(in srgb, var(--panel) 65%, transparent);
 }
 .nc-resume-actions { padding: 12px 16px 8px; margin-top: auto; }
 
@@ -469,18 +493,21 @@ function fmtDate(iso) {
   padding: 24px 16px; text-align: center;
   font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted);
 }
-.nc-err   { color: #f38ba8; }
+.nc-err   { color: var(--danger); }
 .nc-muted { color: var(--muted); opacity: .6; }
 
 /* Project group */
-.nc-proj { border-bottom: 1px solid var(--border); }
+.nc-proj {
+  border-bottom: 1px solid var(--hairline);
+  background: color-mix(in srgb, var(--panel) 30%, transparent);
+}
 
 .nc-proj-hdr {
   display: flex; align-items: center; gap: 8px;
   padding: 11px 16px; cursor: pointer;
-  transition: background .12s;
+  transition: background .12s, color .12s;
 }
-.nc-proj-hdr:hover { background: color-mix(in srgb, var(--neon) 5%, transparent); }
+.nc-proj-hdr:hover { background: color-mix(in srgb, var(--neon) 6%, transparent); }
 
 .nc-proj-path {
   font-family: 'JetBrains Mono', monospace; font-size: 12px;
@@ -488,13 +515,14 @@ function fmtDate(iso) {
 }
 .nc-proj-count {
   font-family: 'JetBrains Mono', monospace; font-size: 10px;
-  color: var(--muted); background: var(--bg3);
-  padding: 1px 6px; border-radius: 3px; flex-shrink: 0;
+  color: var(--muted); background: var(--panel2);
+  padding: 1px 6px; border-radius: var(--radius-sm); flex-shrink: 0;
 }
 .nc-chevron {
   color: var(--neon); font-size: 16px; flex-shrink: 0;
   transition: transform .2s; display: inline-block;
   transform: rotate(-90deg);
+  line-height: 1; overflow: visible; --app-icon-size: 16px;
 }
 .nc-chevron.open { transform: rotate(0deg); }
 
@@ -505,8 +533,8 @@ function fmtDate(iso) {
 }
 .nc-sess {
   padding: 10px 16px 10px 28px; cursor: pointer;
-  border-top: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
-  transition: background .12s;
+  border-top: 1px solid color-mix(in srgb, var(--hairline) 55%, transparent);
+  transition: background .12s, border-color .12s;
 }
 .nc-sess:hover { background: color-mix(in srgb, var(--neon) 5%, transparent); }
 .nc-sess.selected {
@@ -527,8 +555,13 @@ function fmtDate(iso) {
 }
 
 @media (max-width: 520px) {
-  .nc-card { padding: 16px 12px; }
+  .nc-tabs { padding: 7px 10px; }
+  .nc-card { padding: 12px 10px 18px; gap: 12px; }
+  .nc-field { padding: 12px; }
   .nc-dir-row { gap: 6px; }
   .nc-browse-btn { width: 38px; height: 38px; }
+  .nc-actions { justify-content: stretch; }
+  .nc-cancel,
+  .nc-start { flex: 1; }
 }
 </style>

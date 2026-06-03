@@ -54,23 +54,24 @@ watch(() => props.session.sessionId, load);
   flex-direction: column;
   width: 100%;
   height: 100%;
-  background: var(--bg);
+  background: transparent;
   color: var(--text);
 }
 .lv-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 14px;
-  border-bottom: 1px solid color-mix(in srgb, var(--neon) 15%, transparent);
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--hairline);
+  background: color-mix(in srgb, var(--panel) 80%, transparent);
   flex-shrink: 0;
+  box-shadow: inset 0 -1px 0 color-mix(in srgb, #ffffff 4%, transparent);
 }
 .lv-title {
-  font-family: 'Syne', sans-serif;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 800;
   color: var(--neon);
-  letter-spacing: 1px;
 }
 .lv-actions { display: flex; gap: 6px; }
 .lv-btn {
@@ -78,31 +79,38 @@ watch(() => props.session.sessionId, load);
   align-items: center;
   justify-content: center;
   gap: 6px;
-  background: transparent;
-  border: 1px solid color-mix(in srgb, var(--neon) 25%, transparent);
-  border-radius: 4px;
+  background: var(--panel2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
   color: var(--neon);
-  font-family: 'Syne', sans-serif;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
   font-size: 11px;
   padding: 4px 10px;
   cursor: pointer;
-  transition: background 0.15s;
+  transition: background 0.15s, border-color .15s, transform .15s;
+  line-height: 1; overflow: visible; --app-icon-size: 14px;
 }
-.lv-btn:hover { background: color-mix(in srgb, var(--neon) 10%, transparent); }
-.lv-close { border-color: #f38ba830; color: #f38ba8; }
-.lv-close:hover { background: #f38ba815; }
+.lv-btn:hover {
+  background: color-mix(in srgb, var(--neon) 10%, transparent);
+  border-color: var(--border-strong);
+  transform: translateY(-1px);
+}
+.lv-close { border-color: color-mix(in srgb, var(--danger) 30%, transparent); color: var(--danger); }
+.lv-close:hover { background: color-mix(in srgb, var(--danger) 10%, transparent); }
 .lv-path {
   font-family: 'JetBrains Mono', monospace;
   font-size: 10px;
   color: var(--muted);
   padding: 4px 14px;
-  border-bottom: 1px solid #ffffff08;
+  border-bottom: 1px solid var(--hairline);
+  background: color-mix(in srgb, var(--panel) 58%, transparent);
   flex-shrink: 0;
 }
 .lv-body {
   flex: 1;
   overflow: auto;
-  padding: 10px 14px;
+  padding: 12px 14px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--panel) 14%, transparent), transparent 100px);
 }
 .lv-status {
   font-family: 'JetBrains Mono', monospace;
@@ -110,7 +118,7 @@ watch(() => props.session.sessionId, load);
   color: var(--muted);
   padding: 20px 0;
 }
-.lv-error { color: #f38ba8; }
+.lv-error { color: var(--danger); }
 .lv-pre {
   font-family: 'JetBrains Mono', monospace;
   font-size: 12px;
@@ -119,5 +127,6 @@ watch(() => props.session.sessionId, load);
   word-break: break-all;
   color: var(--text);
   margin: 0;
+  padding-bottom: 24px;
 }
 </style>

@@ -7,25 +7,31 @@
     <div class="term-container" ref="termRef"
       :class="{ 'drag-over': dragOver }"></div>
 
-    <!-- 图片/文件上传工具栏 -->
-    <div class="img-bar" @click.stop>
-      <label class="img-upload-btn" :class="{ uploading }" :title="uploading ? '上传中...' : '上传图片或文件'">
-        <input type="file" accept="image/*,*/*" multiple style="display:none"
-          @change="onFileSelect" :disabled="uploading" />
-        <AppIcon v-if="!uploading" name="upload" />
-        <AppIcon v-else name="spinner" spin />
-      </label>
-      <span v-if="lastUploadPath" class="img-path-hint" :title="lastUploadPath">
-        <AppIcon name="check" /> {{ shortPath(lastUploadPath) }}
-      </span>
-    </div>
+    <span v-if="lastUploadPath" class="img-path-hint" :title="lastUploadPath">
+      <AppIcon name="check" /> {{ shortPath(lastUploadPath) }}
+    </span>
 
     <SymbolBar
       v-if="settings.symbolBar"
+      class="terminal-shortcuts"
       :currentLine="currentLine"
       :mode="symbolMode"
       @input="$emit('input', $event)"
-    />
+    >
+      <template v-if="symbolMode !== 'shell'" #prefix>
+        <label
+          class="img-upload-btn"
+          :class="{ uploading }"
+          :title="uploading ? '上传中...' : '上传图片或文件'"
+          @click.stop
+        >
+          <input type="file" accept="image/*,*/*" multiple style="display:none"
+            @change="onFileSelect" :disabled="uploading" />
+          <AppIcon v-if="!uploading" name="upload" />
+          <AppIcon v-else name="spinner" spin />
+        </label>
+      </template>
+    </SymbolBar>
     <Teleport to="body">
       <div v-if="ctxMenu.show" class="ctx-overlay"
         @click="ctxMenu.show = false"
@@ -463,57 +469,105 @@ function ctxClear()     { ctxMenu.show = false; term?.clear(); }
 </script>
 
 <style scoped>
-.terminal-wrap { display: flex; flex-direction: column; width: 100%; height: 100%; overflow: hidden; }
-.term-container { flex: 1; min-height: 0; overflow: hidden; padding: 4px; }
-.term-container.drag-over { outline: 2px dashed var(--neon); outline-offset: -4px; }
-
-/* 图片上传工具栏 */
-.img-bar {
-  display: flex; align-items: center; gap: 8px;
-  padding: 3px 8px;
-  background: var(--bg2);
-  border-top: 1px solid var(--border);
-  flex-shrink: 0;
+.terminal-wrap {
+  position: relative;
+  display: flex; flex-direction: column; width: 100%; height: 100%; overflow: hidden;
 }
+.term-container {
+  flex: 1; min-height: 0; overflow: hidden; padding: 5px;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--panel) 14%, transparent), transparent 120px),
+    var(--bg);
+}
+.term-container.drag-over {
+  outline: 2px dashed color-mix(in srgb, var(--neon) 75%, transparent);
+  outline-offset: -4px;
+  background: color-mix(in srgb, var(--neon) 5%, var(--bg));
+}
+
 .img-upload-btn {
-  display: flex; align-items: center; justify-content: center;
-  width: 26px; height: 22px;
-  background: color-mix(in srgb, var(--neon) 8%, var(--bg3));
-  border: 1px solid var(--border);
-  border-radius: 4px;
+  display: inline-flex; align-items: center; justify-content: center;
+  height: var(--symbol-button-height, 30px);
+  min-height: var(--symbol-button-height, 30px);
+  min-width: 42px;
+  background: color-mix(in srgb, var(--neon) 8%, var(--panel2));
+  border: 1px solid color-mix(in srgb, var(--neon) 24%, transparent);
+  border-radius: var(--radius-sm);
+  color: var(--neon);
   cursor: pointer;
   font-size: 13px;
-  transition: background .12s, border-color .12s;
+  padding: 0;
+  transition: background .12s, border-color .12s, transform .12s, opacity .12s;
   user-select: none;
+  line-height: 1; overflow: visible; --app-icon-size: 14px;
+  flex: 0 0 42px;
 }
-.img-upload-btn:hover { background: color-mix(in srgb, var(--neon) 15%, transparent); border-color: var(--neon); }
+.img-upload-btn:hover { background: color-mix(in srgb, var(--neon) 15%, transparent); border-color: var(--border-strong); transform: translateY(-1px); }
 .img-upload-btn.uploading { opacity: .6; cursor: default; }
 .img-path-hint {
-  display: inline-flex; align-items: center; gap: 4px;
+  position: absolute;
+  left: 10px;
+  bottom: 43px;
+  z-index: 5;
+  display: inline-flex; align-items: center; gap: 5px;
   font-family: 'JetBrains Mono', monospace; font-size: 10px;
-  color: var(--neon); opacity: .7;
+  color: var(--neon);
+  background: color-mix(in srgb, var(--panel) 88%, transparent);
+  border: 1px solid color-mix(in srgb, var(--neon) 28%, transparent);
+  border-radius: var(--radius-sm);
+  padding: 5px 8px;
+  box-shadow: 0 8px 22px color-mix(in srgb, #000000 28%, transparent);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  max-width: 200px;
+  max-width: min(260px, calc(100vw - 20px));
+  pointer-events: none;
+  --app-icon-size: 12px;
+}
+@media (max-width: 700px) {
+  .terminal-shortcuts {
+    display: flex;
+  }
+  .img-upload-btn {
+    width: 100%;
+    min-width: 0;
+    flex: 1 1 auto;
+    height: var(--symbol-button-height, 29px);
+    min-height: var(--symbol-button-height, 29px);
+  }
+  .img-path-hint {
+    bottom: 78px;
+  }
+}
+
+@media (min-width: 701px) {
+  .terminal-shortcuts {
+    display: none;
+  }
+  .img-path-hint {
+    bottom: 10px;
+  }
 }
 </style>
 
 <style>
 .ctx-overlay { position: fixed; inset: 0; z-index: 9999; }
 .ctx-menu {
-  position: fixed; background: var(--bg2); border: 1px solid var(--border);
-  border-radius: 8px; padding: 4px; min-width: 200px;
-  box-shadow: 0 8px 32px #00000060, 0 0 16px var(--glow); z-index: 10000;
+  position: fixed; background: var(--panel); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 4px; min-width: 200px;
+  box-shadow: var(--shadow), 0 0 16px var(--glow); z-index: 10000;
 }
 .ctx-item {
   display: flex; align-items: center; gap: 8px; width: 100%;
   background: none; border: none; cursor: pointer; color: var(--text);
   font-family: 'JetBrains Mono', monospace; font-size: 12px;
-  padding: 8px 10px; border-radius: 5px; text-align: left; transition: background .1s;
+  padding: 8px 10px; border-radius: var(--radius-sm); text-align: left; transition: background .1s;
 }
 .ctx-item:hover { background: color-mix(in srgb, var(--neon) 10%, transparent); }
-.ctx-icon { color: var(--neon); font-size: 13px; width: 16px; text-align: center; flex-shrink: 0; }
+.ctx-icon {
+  color: var(--neon); font-size: 13px; width: 16px; text-align: center; flex-shrink: 0;
+  line-height: 1; overflow: visible; --app-icon-size: 13px;
+}
 .ctx-kbd  { margin-left: auto; color: var(--muted); font-size: 10px; }
-.ctx-divider { height: 1px; background: var(--border); margin: 3px 6px; }
+.ctx-divider { height: 1px; background: var(--hairline); margin: 3px 6px; }
 .paste-trap {
   position: fixed; top: -9999px; left: -9999px;
   width: 1px; height: 1px; opacity: 0; pointer-events: none;
