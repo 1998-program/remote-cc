@@ -66,11 +66,12 @@ sessions: Map<sessionId, {
 - 同 `workingDir + resumeSessionId` 已有活跃会话 → 直接 attach，不重复创建
 - PTY 输出广播给所有 clients（WS + Unix Socket）
 - 会话退出 5s 后自动清理并广播列表更新
+- Web 共享 Shell 是独立的单前台 PTY，会在浏览器断开后保留并向新客户端回放 scrollback
 
 #### `server/fs-handler.js`
 
 文件浏览 API 实现：
-- 安全白名单：`~`、`/tmp`、`/paddle`（可通过 `FS_ROOTS` 环境变量扩展）
+- 安全白名单：默认服务器根目录 `/`（可通过 `FS_ROOTS` 环境变量扩展）
 - `path.resolve()` 防路径遍历
 - 文本预览 100KB 限制，图片预览 2MB 限制
 
@@ -83,9 +84,9 @@ sessions: Map<sessionId, {
 #### `client/src/components/FileBrowser.vue`
 
 文件浏览器组件，双栏布局（文件列表 + 预览）：
-- 默认显示当前会话工作目录，切换会话自动跟随
+- 默认显示 Web 设置中的文件浏览器目录，初始为 `/`
 - 支持文本/代码预览（含行号）、图片预览
-- 「复制路径」操作，预览面板顶部也有复制按钮
+- 支持新建文件夹、上传/下载和复制路径，预览面板顶部也有复制按钮
 
 #### `client/src/App.vue`
 
@@ -157,11 +158,12 @@ PTY session pool, loaded by proxy.js, lifecycle tied to proxy:
 - Same `workingDir + resumeSessionId` with active session → attach directly
 - PTY output broadcast to all clients (WS + Unix Socket)
 - Session auto-removed 5s after PTY exits
+- The Web shared Shell is an independent single foreground PTY, preserved across browser disconnects and replayed to new clients
 
 #### `server/fs-handler.js`
 
 File browser API:
-- Whitelist roots: `~`, `/tmp`, `/paddle` (extendable via `FS_ROOTS`)
+- Whitelist roots: server root `/` by default (extendable via `FS_ROOTS`)
 - `path.resolve()` prevents traversal attacks
 - Text preview 100KB limit, image preview 2MB limit
 

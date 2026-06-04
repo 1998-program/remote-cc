@@ -12,19 +12,25 @@
       >{{ sym.label }}</button>
     </div>
 
-    <!-- Shell 模式：两排，无标签 -->
+    <!-- Shell 模式：两行移动端专用键位 -->
     <div v-else class="symbol-rows-wrap">
-      <div class="symbol-row">
-        <button v-for="sym in SH_ROW1" :key="sym.key"
+      <div
+        v-for="row in SH_ROWS"
+        :key="row.key"
+        class="symbol-row"
+        :class="`symbol-row--${row.key}`"
+      >
+        <button v-for="sym in row.items" :key="sym.key"
           class="sym-btn"
-          @click="onTap(sym)"
-          @touchstart.prevent="onTouchStart(sym)"
-          @touchend.prevent="onTouchEnd(sym)"
-        >{{ sym.label }}</button>
-      </div>
-      <div class="symbol-row">
-        <button v-for="sym in SH_ROW2" :key="sym.key"
-          class="sym-btn"
+          :class="[
+            `sym-btn--${sym.key}`,
+            {
+              'sym-btn--modifier': sym.modifier,
+              'is-active': sym.modifier && sym.modifier === activeModifier,
+            }
+          ]"
+          :title="sym.title || sym.label"
+          :aria-label="sym.title || sym.label"
           @click="onTap(sym)"
           @touchstart.prevent="onTouchStart(sym)"
           @touchend.prevent="onTouchEnd(sym)"
@@ -51,10 +57,12 @@ import { computed, reactive, useSlots } from 'vue';
 const props = defineProps({
   currentLine: { type: String, default: '' },
   mode: { type: String, default: 'auto' },
+  activeModifier: { type: String, default: '' },
 });
-const emit = defineEmits(['input']);
+const emit = defineEmits(['input', 'modifier']);
 const slots = useSlots();
 const hasPrefixSlot = computed(() => Boolean(slots.prefix));
+const activeModifier = computed(() => props.activeModifier);
 
 const shellMode = computed(() => {
   if (props.mode === 'shell') return true;
@@ -76,35 +84,51 @@ const CC_SYMBOLS = [
   { key: 'enter', label: '⏎',   value: '\r' },   // 回车放最右
 ];
 
-// ── Shell 模式：两排，Linux 常用符号 ─────────────────────────────────────────
-const SH_ROW1 = [
-  { key: 'tab',   label: 'Tab', value: '\t' },
-  { key: 'esc',   label: 'Esc', value: '\x1b' },
-  { key: 'up',    label: '↑',   value: '\x1b[A' },
-  { key: 'down',  label: '↓',   value: '\x1b[B' },
-  { key: 'left',  label: '←',   value: '\x1b[D' },
-  { key: 'right', label: '→',   value: '\x1b[C' },
-  { key: 'enter', label: '⏎',   value: '\r' },
-];
-
-const SH_ROW2 = [
-  { key: 'slash', label: '/',   value: '/' },
-  { key: 'tilde', label: '~',   value: '~' },
-  { key: 'dash',  label: '-',   value: '-' },
-  { key: 'pipe',  label: '|',   value: '|',  variants: [{ label: '|', value: '|' }, { label: '||', value: '||' }] },
-  { key: 'amp',   label: '&',   value: '&',  variants: [{ label: '&', value: '&' }, { label: '&&', value: '&&' }] },
-  { key: 'semi',  label: ';',   value: ';' },
-  { key: 'gt',    label: '>',   value: '>',  variants: [{ label: '>',  value: '>' }, { label: '>>', value: '>>' }, { label: '2>', value: '2>' }] },
+// ── Shell 模式：两行移动端专用键位。修饰键由 Terminal.vue 作用到下一次输入。──
+const SH_ROWS = [
+  {
+    key: 'primary',
+    items: [
+      { key: 'esc',   label: 'ESC',  value: '\x1b' },
+      { key: 'slash', label: '/',    value: '/' },
+      { key: 'pipe',  label: '|',    value: '|' },
+      { key: 'dash',  label: '-',    value: '-' },
+      { key: 'home',  label: 'HOME', value: '\x1b[H', title: 'Home' },
+      { key: 'up',    label: '↑',    value: '\x1b[A', title: 'Up' },
+      { key: 'end',   label: 'END',  value: '\x1b[F', title: 'End' },
+      { key: 'tab',   label: 'TAB',  value: '\t' },
+    ],
+  },
+  {
+    key: 'secondary',
+    items: [
+      { key: 'fn',    label: 'FN',   modifier: 'fn', title: 'Fn' },
+      { key: 'ctrl',  label: 'CTRL', modifier: 'ctrl', title: 'Ctrl' },
+      { key: 'alt',   label: 'ALT',  modifier: 'alt', title: 'Alt' },
+      { key: 'left',  label: '←',    value: '\x1b[D', title: 'Left' },
+      { key: 'down',  label: '↓',    value: '\x1b[B', title: 'Down' },
+      { key: 'right', label: '→',    value: '\x1b[C', title: 'Right' },
+      { key: 'tilde', label: '~',    value: '~' },
+    ],
+  },
 ];
 
 const popup = reactive({ show: false, variants: [] });
 let longTimer = null;
 
 function onTap(sym) {
+  if (sym.modifier) {
+    emit('modifier', sym.modifier);
+    return;
+  }
   if (!sym.variants?.length) emit('input', sym.value);
 }
 
 function onTouchStart(sym) {
+  if (sym.modifier) {
+    emit('modifier', sym.modifier);
+    return;
+  }
   if (!sym.variants?.length) {
     emit('input', sym.value);
     return;
@@ -151,12 +175,12 @@ function onTouchEnd(sym) {
   min-width: 0;
 }
 
-/* Shell 两排容器 */
+/* Shell 专用两排容器 */
 .symbol-rows-wrap {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 5px;
   min-width: 0;
 }
 .symbol-row {
@@ -221,15 +245,54 @@ function onTouchEnd(sym) {
   color: var(--neon2);
   border-color: color-mix(in srgb, var(--neon2) 22%, transparent);
   background: color-mix(in srgb, var(--neon2) 6%, var(--panel2));
+  font-weight: 650;
 }
 .shell-mode .sym-btn:active {
   background: color-mix(in srgb, var(--neon2) 20%, transparent);
   box-shadow: 0 0 6px color-mix(in srgb, var(--neon2) 40%, transparent);
 }
+.shell-mode .sym-btn--modifier {
+  color: var(--neon);
+  border-color: color-mix(in srgb, var(--neon) 28%, transparent);
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--neon) 12%, transparent),
+      color-mix(in srgb, var(--neon) 5%, var(--panel2)));
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+.shell-mode .sym-btn--modifier:active,
+.shell-mode .sym-btn--modifier.is-active {
+  background: color-mix(in srgb, var(--neon) 22%, transparent);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--neon) 40%, transparent);
+}
+.shell-mode .sym-btn--home,
+.shell-mode .sym-btn--end,
+.shell-mode .sym-btn--ctrl {
+  font-size: 10px;
+}
 
 @media (max-width: 700px) {
   .symbol-bar {
     --symbol-button-height: 29px;
+  }
+  .symbol-bar.shell-mode {
+    padding: 6px;
+  }
+  .shell-mode .symbol-rows-wrap {
+    gap: 5px;
+  }
+  .shell-mode .symbol-row {
+    gap: 4px;
+  }
+  .shell-mode .sym-btn {
+    padding: 0 1px;
+  }
+  .shell-mode .sym-btn--home,
+  .shell-mode .sym-btn--end,
+  .shell-mode .sym-btn--ctrl {
+    font-size: 10px;
   }
   .cc-mode .symbol-scroll.has-prefix {
     display: grid;

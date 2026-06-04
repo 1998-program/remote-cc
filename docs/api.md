@@ -177,10 +177,10 @@ GET /api/fs/download?path=/path/to/file
 | `start` | 创建新会话 | `workingDir`, `name`, `resumeSessionId?`, `cols`, `rows` |
 | `attach` | 接入已有会话 | `sessionId` |
 | `resize` | 调整终端尺寸 | `cols`, `rows` |
-| `shell_start` | 创建不持久化临时 shell | `cwd`, `cols`, `rows` |
-| `shell_input` | 写入临时 shell stdin | `data` |
-| `shell_resize` | 调整临时 shell 尺寸 | `cols`, `rows` |
-| `shell_kill` | 关闭临时 shell | — |
+| `shell_start` | 接入共享前台 Shell，必要时创建 | `cwd`, `cols`, `rows` |
+| `shell_input` | 写入共享 Shell stdin | `data` |
+| `shell_resize` | 按当前客户端尺寸调整共享 Shell | `cols`, `rows` |
+| `shell_kill` | 关闭共享 Shell | — |
 | `kill` | 终止会话 | `sessionId` |
 | `delete` | 删除会话记录 | `sessionId` |
 | `rename` | 重命名会话 | `sessionId`, `name` |
@@ -196,9 +196,10 @@ GET /api/fs/download?path=/path/to/file
 | `replay_start` / `replay_end` | Scrollback 回放边界 |
 | `exit` | PTY 进程退出，含 `exitCode` |
 | `error` | 错误信息 |
-| `shell_ready` | 临时 shell 创建完成，含 `cwd` |
-| `shell_exit` | 临时 shell 已退出，含 `exitCode` |
-| `shell_error` | 临时 shell 错误信息 |
+| `shell_replay_start` / `shell_replay_end` | 共享 Shell scrollback 回放边界 |
+| `shell_ready` | 共享 Shell 已接入，含 `cwd` |
+| `shell_exit` | 共享 Shell 已退出，含 `exitCode` |
+| `shell_error` | 共享 Shell 错误信息 |
 
 ---
 
@@ -391,10 +392,10 @@ On connect, the server immediately sends: `{"type":"session_list","sessions":[..
 | `start` | Create new session | `workingDir`, `name`, `resumeSessionId?`, `cols`, `rows` |
 | `attach` | Attach to existing session | `sessionId` |
 | `resize` | Resize terminal | `cols`, `rows` |
-| `shell_start` | Create a non-persistent temporary shell | `cwd`, `cols`, `rows` |
-| `shell_input` | Write to temporary shell stdin | `data` |
-| `shell_resize` | Resize temporary shell | `cols`, `rows` |
-| `shell_kill` | Close temporary shell | — |
+| `shell_start` | Attach to the shared foreground shell, creating it if needed | `cwd`, `cols`, `rows` |
+| `shell_input` | Write to shared shell stdin | `data` |
+| `shell_resize` | Resize shared shell for the current client | `cols`, `rows` |
+| `shell_kill` | Close the shared shell | — |
 | `kill` | Kill session PTY | `sessionId` |
 | `delete` | Delete session record | `sessionId` |
 | `rename` | Rename session | `sessionId`, `name` |
@@ -410,9 +411,10 @@ On connect, the server immediately sends: `{"type":"session_list","sessions":[..
 | `replay_start` / `replay_end` | Scrollback replay boundaries |
 | `exit` | PTY process exited, includes `exitCode` |
 | `error` | Error message |
-| `shell_ready` | Temporary shell is ready, includes `cwd` |
-| `shell_exit` | Temporary shell exited, includes `exitCode` |
-| `shell_error` | Temporary shell error message |
+| `shell_replay_start` / `shell_replay_end` | Shared shell scrollback replay boundaries |
+| `shell_ready` | Shared shell is ready, includes `cwd` |
+| `shell_exit` | Shared shell exited, includes `exitCode` |
+| `shell_error` | Shared shell error message |
 
 ---
 

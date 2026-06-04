@@ -7,6 +7,63 @@
     <div class="term-container" ref="termRef"
       :class="{ 'drag-over': dragOver }"></div>
 
+    <textarea
+      v-if="isMobileUi"
+      ref="mobileInputRef"
+      class="mobile-input-trap"
+      autocomplete="off"
+      autocapitalize="off"
+      autocorrect="off"
+      spellcheck="false"
+      inputmode="text"
+      enterkeyhint="enter"
+      @click.stop
+      @input="onMobileInput"
+      @keydown="onMobileKeydown"
+      @compositionstart="onMobileCompositionStart"
+      @compositionend="onMobileCompositionEnd"
+      @paste="onMobilePaste"
+    ></textarea>
+
+    <div v-if="mobileCopyMode" class="mobile-copy-layer" @click.stop>
+      <div class="mobile-copy-toolbar">
+        <button
+          class="mobile-copy-action"
+          title="Copy selected text"
+          aria-label="Copy selected text"
+          @click.stop="copyMobileText"
+        >
+          <AppIcon name="copy" />
+        </button>
+        <button
+          class="mobile-copy-action"
+          title="Close"
+          aria-label="Close"
+          @click.stop="closeMobileCopyMode"
+        >
+          <AppIcon name="close" />
+        </button>
+      </div>
+      <textarea
+        ref="mobileCopyTextRef"
+        class="mobile-copy-text"
+        :value="mobileCopyText"
+        readonly
+        spellcheck="false"
+        @click.stop
+      ></textarea>
+    </div>
+
+    <button
+      v-if="isMobileUi && terminalSelection"
+      class="mobile-selection-copy"
+      title="Copy selected text"
+      aria-label="Copy selected text"
+      @click.stop="copyTerminalSelection"
+    >
+      <AppIcon name="copy" />
+    </button>
+
     <span v-if="lastUploadPath" class="img-path-hint" :title="lastUploadPath">
       <AppIcon name="check" /> {{ shortPath(lastUploadPath) }}
     </span>
@@ -16,7 +73,9 @@
       class="terminal-shortcuts"
       :currentLine="currentLine"
       :mode="symbolMode"
-      @input="$emit('input', $event)"
+      :active-modifier="mobileModifier"
+      @input="onSymbolInput"
+      @modifier="onMobileModifier"
     >
       <template v-if="symbolMode !== 'shell'" #prefix>
         <label
@@ -41,6 +100,7 @@
           <!-- Paste：点击后聚焦隐藏 input，让用户用 Ctrl+V 粘贴 -->
           <button class="ctx-item" @click="ctxPasteClick"><AppIcon name="paste" class="ctx-icon" /> Paste <span class="ctx-kbd">Ctrl+Shift+V</span></button>
           <div class="ctx-divider"></div>
+          <button v-if="isMobileUi" class="ctx-item" @click="ctxTextSelect"><AppIcon name="select-all" class="ctx-icon" /> Text Select</button>
           <button class="ctx-item" @click="ctxSelectAll"><AppIcon name="select-all" class="ctx-icon" /> Select All</button>
           <button class="ctx-item" @click="ctxClear"><AppIcon name="clear" class="ctx-icon" /> Clear</button>
         </div>
@@ -74,8 +134,15 @@ const emit = defineEmits(['input', 'resize', 'paste']);
 const termRef = ref(null);
 const wrapRef = ref(null);
 const pasteInputRef = ref(null);
+const mobileCopyTextRef = ref(null);
+const mobileInputRef = ref(null);
 const ctxMenu = reactive({ show: false, x: 0, y: 0 });
 const currentLine = ref('');
+const isMobileUi = ref(false);
+const terminalSelection = ref('');
+const mobileCopyMode = ref(false);
+const mobileCopyText = ref('');
+const mobileModifier = ref('');
 
 // ── 图片/文件上传 ─────────────────────────────────────────────────────────────
 const uploading = ref(false);
@@ -83,9 +150,20 @@ const dragOver  = ref(false);
 const lastUploadPath = ref('');
 
 // 始终把焦点还给 xterm 的内部 textarea
-function focusTerm() {
+function focusTerm(e) {
+  if (mobileCopyMode.value) return;
+  if (e?.target?.closest?.('.mobile-copy-layer, .mobile-selection-copy, .ctx-menu')) return;
+  if (isMobileViewport() && term?.getSelection?.()) return;
+  if (isMobileViewport() && focusMobileInput()) return;
   const ta = termRef.value?.querySelector('.xterm-helper-textarea');
   if (ta) ta.focus();
+}
+
+function focusMobileInput() {
+  const input = mobileInputRef.value;
+  if (!input) return false;
+  try { input.focus({ preventScroll: true }); } catch (_) { input.focus(); }
+  return document.activeElement === input;
 }
 
 function shortPath(p) {
@@ -145,6 +223,14 @@ let awaitingPaste = false;
 
 let term, fitAddon, resizeObserver, resizeTimer;
 let lastW = 0, lastH = 0;
+let selectionDisposable = null;
+let mobileMediaQuery = null;
+let mobileMediaQueryCleanup = null;
+let longPressTimer = null;
+let touchStartPoint = null;
+let touchMoved = false;
+let copyModeOpenedNearBottom = true;
+let mobileInputComposing = false;
 
 // ── 自动锁底 + 上划暂停更新 ──────────────────────────────────────────────────
 let userScrolled = false;       // 用户是否主动上划
@@ -153,6 +239,16 @@ let userScrollIntentUntil = 0;   // 只有用户输入触发的滚动才暂停�
 let autoScrollUntil = 0;         // 程序写入触发的滚动不应暂停锁底
 const pendingWrites = [];        // 用户上划时缓存的输出
 let boundViewport = null;
+
+function isMobileViewport() {
+  if (typeof window === 'undefined') return false;
+  const mq = window.matchMedia?.('(max-width: 700px), (pointer: coarse)');
+  return Boolean(mq?.matches) || window.innerWidth <= 700;
+}
+
+function updateMobileUi() {
+  isMobileUi.value = isMobileViewport();
+}
 
 // 检测用户是否滑到底部附近（20px 内认为在底部）
 function isNearBottom() {
@@ -163,21 +259,24 @@ function isNearBottom() {
 }
 
 function onViewportScroll() {
-  if (isNearBottom()) {
+  const now = Date.now();
+  if (isNearBottom() && !mobileCopyMode.value) {
     // 回到底部 → 恢复自动跟随，冲刷缓存
     userScrolled = false;
     clearTimeout(scrollResumeTimer);
     flushPending();
-  } else if (Date.now() < autoScrollUntil) {
-    return;
-  } else if (Date.now() < userScrollIntentUntil) {
+  } else if (now < userScrollIntentUntil) {
     // 上划 → 暂停自动更新
+    userScrolled = true;
+  } else if (now < autoScrollUntil) {
+    return;
+  } else if (isMobileViewport()) {
     userScrolled = true;
   }
 }
 
 function markUserScrollIntent() {
-  userScrollIntentUntil = Date.now() + 800;
+  userScrollIntentUntil = Date.now() + (isMobileViewport() ? 4000 : 900);
 }
 
 function bindViewport(vp) {
@@ -187,6 +286,7 @@ function bindViewport(vp) {
   vp.addEventListener('scroll', onViewportScroll, { passive: true });
   vp.addEventListener('wheel', markUserScrollIntent, { passive: true });
   vp.addEventListener('touchstart', markUserScrollIntent, { passive: true });
+  vp.addEventListener('touchmove', markUserScrollIntent, { passive: true });
   vp.addEventListener('pointerdown', markUserScrollIntent, { passive: true });
 }
 
@@ -195,11 +295,13 @@ function unbindViewport() {
   boundViewport.removeEventListener('scroll', onViewportScroll);
   boundViewport.removeEventListener('wheel', markUserScrollIntent);
   boundViewport.removeEventListener('touchstart', markUserScrollIntent);
+  boundViewport.removeEventListener('touchmove', markUserScrollIntent);
   boundViewport.removeEventListener('pointerdown', markUserScrollIntent);
   boundViewport = null;
 }
 
 function scrollToBottomSoon() {
+  if (mobileCopyMode.value || (isMobileViewport() && userScrolled)) return;
   autoScrollUntil = Date.now() + 500;
   clearTimeout(scrollResumeTimer);
   scrollResumeTimer = setTimeout(() => {
@@ -220,7 +322,7 @@ function flushPending() {
 
 // 对外暴露的 write：上划时缓存，否则直接写并锁底
 function smartWrite(data) {
-  if (userScrolled) {
+  if (userScrolled || mobileCopyMode.value) {
     // 超出上限（跟 scrollback 一致）时丢弃最老的，保留最新
     pendingWrites.push(data);
     const max = settings.scrollback || 5000;
@@ -232,6 +334,19 @@ function smartWrite(data) {
 }
 
 onMounted(() => {
+  updateMobileUi();
+  mobileMediaQuery = window.matchMedia?.('(max-width: 700px), (pointer: coarse)');
+  if (mobileMediaQuery) {
+    if (mobileMediaQuery.addEventListener) {
+      mobileMediaQuery.addEventListener('change', updateMobileUi);
+      mobileMediaQueryCleanup = () => mobileMediaQuery.removeEventListener('change', updateMobileUi);
+    } else if (mobileMediaQuery.addListener) {
+      mobileMediaQuery.addListener(updateMobileUi);
+      mobileMediaQueryCleanup = () => mobileMediaQuery.removeListener(updateMobileUi);
+    }
+  }
+  window.addEventListener('resize', updateMobileUi);
+
   const td = THEMES[props.theme] || THEMES.cyber;
   const fontDef = FONT_FAMILIES.find(f => f.id === settings.fontFamily) || FONT_FAMILIES[0];
 
@@ -251,6 +366,9 @@ onMounted(() => {
   term.loadAddon(fitAddon);
   term.loadAddon(new WebLinksAddon());
   term.open(termRef.value);
+  selectionDisposable = term.onSelectionChange(() => {
+    terminalSelection.value = term.getSelection();
+  });
 
   if (wrapRef.value) wrapRef.value.style.background = td.bg;
 
@@ -300,6 +418,10 @@ onMounted(() => {
   termRef.value.addEventListener('paste', onNativePaste);
 
   termRef.value.addEventListener('contextmenu', onContextMenu);
+  termRef.value.addEventListener('touchstart', onTermTouchStart, { passive: true });
+  termRef.value.addEventListener('touchmove', onTermTouchMove, { passive: true });
+  termRef.value.addEventListener('touchend', clearLongPressTimer, { passive: true });
+  termRef.value.addEventListener('touchcancel', clearLongPressTimer, { passive: true });
 
   watch(() => props.theme, t => {
     const theme = THEMES[t] || THEMES.cyber;
@@ -328,7 +450,7 @@ onMounted(() => {
         resizeTimer = setTimeout(() => {
           fitAddon.fit();
           emit('resize', { cols: term.cols, rows: term.rows });
-          if (!userScrolled) scrollToBottomSoon();
+          if (!userScrolled && !mobileCopyMode.value) scrollToBottomSoon();
         }, 80);
       }
     }
@@ -339,22 +461,34 @@ onMounted(() => {
 onBeforeUnmount(() => {
   resizeObserver?.disconnect();
   clearTimeout(resizeTimer);
+  clearLongPressTimer();
+  window.removeEventListener('resize', updateMobileUi);
+  mobileMediaQueryCleanup?.();
   unbindViewport();
   termRef.value?.removeEventListener('contextmenu', onContextMenu);
   termRef.value?.removeEventListener('paste', onNativePaste);
   termRef.value?.removeEventListener('paste', onTerminalPaste);
+  termRef.value?.removeEventListener('touchstart', onTermTouchStart);
+  termRef.value?.removeEventListener('touchmove', onTermTouchMove);
+  termRef.value?.removeEventListener('touchend', clearLongPressTimer);
+  termRef.value?.removeEventListener('touchcancel', clearLongPressTimer);
+  selectionDisposable?.dispose();
   term?.dispose();
 });
 
 function write(data) { smartWrite(data); }
 function fit() {
   fitAddon?.fit();
-  if (!userScrolled) scrollToBottomSoon();
+  if (!userScrolled && !mobileCopyMode.value) scrollToBottomSoon();
 }
 function scrollToBottom() {
   userScrolled = false;
   flushPending();
   term?.scrollToBottom();
+}
+function clear() {
+  pendingWrites.splice(0);
+  term?.clear();
 }
 
 // 供外部（SymbolBar 通过 App）同步更新行追踪，保持与键盘输入相同的逻辑
@@ -370,7 +504,124 @@ function trackInput(data) {
 
 function getCols() { return term?.cols ?? 80; }
 function getRows() { return term?.rows ?? 24; }
-defineExpose({ write, fit, scrollToBottom, trackInput, getCols, getRows });
+defineExpose({ write, fit, scrollToBottom, clear, trackInput, getCols, getRows });
+
+watch(() => props.symbolMode, mode => {
+  if (mode !== 'shell') mobileModifier.value = '';
+});
+
+function onMobileModifier(modifier) {
+  mobileModifier.value = mobileModifier.value === modifier ? '' : modifier;
+  focusMobileInput();
+  nextTick(() => focusMobileInput());
+}
+
+function onSymbolInput(data) {
+  emitMobileInput(data);
+}
+
+function ctrlChar(data) {
+  if (data === '\x1b[A') return '\x1b[1;5A';
+  if (data === '\x1b[B') return '\x1b[1;5B';
+  if (data === '\x1b[C') return '\x1b[1;5C';
+  if (data === '\x1b[D') return '\x1b[1;5D';
+  if (data === '\x1b[H') return '\x1b[1;5H';
+  if (data === '\x1b[F') return '\x1b[1;5F';
+  if (data === '\x1b[3~') return '\x1b[3;5~';
+  if (data.length !== 1) return data;
+
+  const ch = data[0];
+  const code = ch.toUpperCase().charCodeAt(0);
+  if (code >= 64 && code <= 95) return String.fromCharCode(code - 64);
+  if (ch === '?') return '\x7f';
+  return data;
+}
+
+function fnKey(data) {
+  const fnMap = {
+    '1': '\x1bOP',
+    '2': '\x1bOQ',
+    '3': '\x1bOR',
+    '4': '\x1bOS',
+    '5': '\x1b[15~',
+    '6': '\x1b[17~',
+    '7': '\x1b[18~',
+    '8': '\x1b[19~',
+    '9': '\x1b[20~',
+    '0': '\x1b[21~',
+    '-': '\x1b[23~',
+    '=': '\x1b[24~',
+  };
+  if (fnMap[data]) return fnMap[data];
+  if (data === '\x1b[A') return '\x1b[5~';
+  if (data === '\x1b[B') return '\x1b[6~';
+  if (data === '\x1b[D') return '\x1b[H';
+  if (data === '\x1b[C') return '\x1b[F';
+  return data;
+}
+
+function applyMobileModifier(data) {
+  const modifier = mobileModifier.value;
+  if (!modifier || !data) return data;
+  mobileModifier.value = '';
+  if (modifier === 'ctrl') return ctrlChar(data);
+  if (modifier === 'alt') return `\x1b${data}`;
+  if (modifier === 'fn') return fnKey(data);
+  return data;
+}
+
+function emitMobileInput(data) {
+  if (!data) return;
+  emit('input', applyMobileModifier(data));
+  nextTick(() => focusMobileInput());
+}
+
+function onMobileInput(e) {
+  if (mobileInputComposing) return;
+  const value = e.target.value;
+  if (value) emitMobileInput(value);
+  e.target.value = '';
+}
+
+function onMobileCompositionStart() {
+  mobileInputComposing = true;
+}
+
+function onMobileCompositionEnd(e) {
+  mobileInputComposing = false;
+  const value = e.target.value;
+  if (value) emitMobileInput(value);
+  e.target.value = '';
+}
+
+function onMobileKeydown(e) {
+  if (mobileInputComposing) return;
+  const mapped = {
+    Enter: '\r',
+    Backspace: '\x7f',
+    Tab: '\t',
+    Escape: '\x1b',
+    ArrowUp: '\x1b[A',
+    ArrowDown: '\x1b[B',
+    ArrowRight: '\x1b[C',
+    ArrowLeft: '\x1b[D',
+    Home: '\x1b[H',
+    End: '\x1b[F',
+    Delete: '\x1b[3~',
+  }[e.key];
+  if (!mapped) return;
+  e.preventDefault();
+  e.target.value = '';
+  emitMobileInput(mapped);
+}
+
+function onMobilePaste(e) {
+  const text = e.clipboardData?.getData('text');
+  if (!text) return;
+  e.preventDefault();
+  e.target.value = '';
+  emitMobileInput(text);
+}
 
 // ── 复制工具函数（兼容 HTTP 非安全上下文） ───────────────────────────────────
 function copyText(text) {
@@ -380,6 +631,102 @@ function copyText(text) {
     navigator.clipboard.writeText(text).catch(() => fallbackCopy(text));
   } else {
     fallbackCopy(text);
+  }
+}
+
+function getTerminalBufferText() {
+  const buffer = term?.buffer?.active;
+  if (!buffer) return terminalSelection.value || '';
+
+  const rows = [];
+  for (let i = 0; i < buffer.length; i += 1) {
+    const line = buffer.getLine(i);
+    if (!line) continue;
+    const text = line.translateToString(true);
+    if (line.isWrapped && rows.length > 0) {
+      rows[rows.length - 1] += text;
+    } else {
+      rows.push(text);
+    }
+  }
+  return rows.join('\n').replace(/\n+$/g, '');
+}
+
+function openMobileCopyMode() {
+  if (!isMobileViewport()) return;
+  clearLongPressTimer();
+  ctxMenu.show = false;
+  copyModeOpenedNearBottom = isNearBottom();
+  userScrolled = true;
+  mobileCopyText.value = getTerminalBufferText();
+  mobileCopyMode.value = true;
+  nextTick(() => {
+    const el = mobileCopyTextRef.value;
+    if (!el) return;
+    try { el.focus({ preventScroll: true }); } catch (_) { el.focus(); }
+    el.scrollTop = Math.max(0, el.scrollHeight - el.clientHeight);
+  });
+}
+
+function closeMobileCopyMode() {
+  mobileCopyMode.value = false;
+  mobileCopyText.value = '';
+  if (copyModeOpenedNearBottom) {
+    userScrolled = false;
+    flushPending();
+    scrollToBottomSoon();
+  }
+  nextTick(() => focusTerm());
+}
+
+function copyMobileText() {
+  const el = mobileCopyTextRef.value;
+  const start = el?.selectionStart ?? 0;
+  const end = el?.selectionEnd ?? 0;
+  const selected = el && end > start ? el.value.slice(start, end) : '';
+  copyText(selected || mobileCopyText.value);
+}
+
+function copyTerminalSelection() {
+  const sel = term?.getSelection() || terminalSelection.value;
+  copyText(sel);
+  terminalSelection.value = '';
+}
+
+function clearLongPressTimer() {
+  clearTimeout(longPressTimer);
+  longPressTimer = null;
+  touchStartPoint = null;
+  touchMoved = false;
+}
+
+function onTermTouchStart(e) {
+  if (!isMobileViewport() || mobileCopyMode.value) return;
+  const touch = e.touches?.[0];
+  if (!touch) return;
+  markUserScrollIntent();
+  touchStartPoint = { x: touch.clientX, y: touch.clientY };
+  touchMoved = false;
+  clearTimeout(longPressTimer);
+  longPressTimer = setTimeout(() => {
+    if (!touchMoved) openContextMenuAt(touch.clientX, touch.clientY);
+  }, 650);
+}
+
+function onTermTouchMove(e) {
+  if (!isMobileViewport()) return;
+  markUserScrollIntent();
+  const touch = e.touches?.[0];
+  if (!touch || !touchStartPoint) return;
+  const dx = Math.abs(touch.clientX - touchStartPoint.x);
+  const dy = touch.clientY - touchStartPoint.y;
+  if (dx > 10 || Math.abs(dy) > 10) {
+    touchMoved = true;
+    clearTimeout(longPressTimer);
+    longPressTimer = null;
+  }
+  if (dy > 8 || !isNearBottom()) {
+    userScrolled = true;
   }
 }
 
@@ -415,8 +762,12 @@ function onNativePaste(e) {
 
 function onContextMenu(e) {
   e.preventDefault();
-  ctxMenu.x = Math.min(e.clientX, window.innerWidth - 168);
-  ctxMenu.y = Math.min(e.clientY, window.innerHeight - 148);
+  clearLongPressTimer();
+  openContextMenuAt(e.clientX, e.clientY);
+}
+function openContextMenuAt(x, y) {
+  ctxMenu.x = Math.min(x, window.innerWidth - 168);
+  ctxMenu.y = Math.min(y, window.innerHeight - 176);
   ctxMenu.show = true;
 }
 function ctxCopy() {
@@ -464,6 +815,9 @@ function onTrapKeydown(e) {
   if (e.key.length === 1) emit('input', e.key);
   nextTick(() => focusTerm());
 }
+function ctxTextSelect() {
+  openMobileCopyMode();
+}
 function ctxSelectAll() { ctxMenu.show = false; term?.selectAll(); }
 function ctxClear()     { ctxMenu.show = false; term?.clear(); }
 </script>
@@ -483,6 +837,102 @@ function ctxClear()     { ctxMenu.show = false; term?.clear(); }
   outline: 2px dashed color-mix(in srgb, var(--neon) 75%, transparent);
   outline-offset: -4px;
   background: color-mix(in srgb, var(--neon) 5%, var(--bg));
+}
+
+.mobile-input-trap {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  z-index: 2;
+  width: 2px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  opacity: 0.01;
+  color: transparent;
+  background: transparent;
+  caret-color: transparent;
+  resize: none;
+  pointer-events: none;
+  font-size: 16px;
+  line-height: 1;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.mobile-copy-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  display: flex;
+  flex-direction: column;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--panel) 94%, transparent), color-mix(in srgb, var(--bg) 96%, transparent)),
+    var(--bg);
+  border: 1px solid color-mix(in srgb, var(--neon) 22%, transparent);
+}
+
+.mobile-copy-toolbar {
+  flex: 0 0 auto;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 8px;
+  border-bottom: 1px solid var(--hairline);
+  background: color-mix(in srgb, var(--panel) 92%, transparent);
+}
+
+.mobile-copy-action,
+.mobile-selection-copy {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid color-mix(in srgb, var(--neon) 24%, transparent);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--panel2) 88%, transparent);
+  color: var(--text);
+  cursor: pointer;
+  line-height: 1;
+  --app-icon-size: 16px;
+}
+
+.mobile-copy-action:active,
+.mobile-selection-copy:active {
+  background: color-mix(in srgb, var(--neon) 14%, var(--panel2));
+  color: var(--neon);
+}
+
+.mobile-copy-text {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  border: 0;
+  outline: 0;
+  resize: none;
+  padding: 10px;
+  color: var(--text);
+  background: transparent;
+  font-family: 'RemoteCC MesloLGM NF', 'MesloLGM NF', 'RemoteCC MesloLGL NF', 'MesloLGL NF', 'JetBrains Mono', monospace;
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  user-select: text;
+  -webkit-user-select: text;
+  -webkit-touch-callout: default;
+  touch-action: pan-y;
+}
+
+.mobile-selection-copy {
+  position: absolute;
+  right: 10px;
+  top: 10px;
+  z-index: 7;
+  box-shadow: 0 10px 24px color-mix(in srgb, #000000 24%, transparent);
 }
 
 .img-upload-btn {
@@ -523,6 +973,14 @@ function ctxClear()     { ctxMenu.show = false; term?.clear(); }
   --app-icon-size: 12px;
 }
 @media (max-width: 700px) {
+  .term-container :deep(.xterm-viewport) {
+    touch-action: pan-y;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+  .term-container :deep(.xterm-screen) {
+    touch-action: manipulation;
+  }
   .terminal-shortcuts {
     display: flex;
   }
