@@ -96,6 +96,8 @@ const localizedMarkdown = computed(() =>
 );
 const rendered = computed(() => marked.parse(rewriteDocAssetUrls(localizedMarkdown.value)));
 
+const sharedSectionPattern = /^##\s+(?:(?:更新记录|更新日志)\s*\/\s*Changelog|Changelog\s*\/\s*(?:更新记录|更新日志)|License\s*\/\s*许可证|许可证\s*\/\s*License)\s*$/m;
+
 function extractLocalizedMarkdown(text, lang, title) {
   if (!text) return '';
   const zhMatch = text.match(/^##\s+中文\s*$/m);
@@ -107,8 +109,12 @@ function extractLocalizedMarkdown(text, lang, title) {
   const body = lang === 'en'
     ? text.slice(enStart)
     : text.slice(zhStart, enMatch.index);
+  const sharedSectionMatch = body.match(sharedSectionPattern);
+  const localizedBody = sharedSectionMatch
+    ? body.slice(0, sharedSectionMatch.index)
+    : body;
 
-  return `# ${title}\n\n${body.trim()}\n`;
+  return `# ${title}\n\n${localizedBody.trim()}\n`;
 }
 
 function rewriteDocAssetUrls(markdown) {

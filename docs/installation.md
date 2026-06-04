@@ -52,7 +52,7 @@ cd ../client && npm install && npm run build
 |------|--------|------|
 | `RC_USER` | `admin` | 登录用户名 |
 | `RC_PASS` | — | 登录密码（**必须设置**） |
-| `PORT` | `3000` | 监听端口 |
+| `PORT` | `8310` | 监听端口 |
 | `IS_SANDBOX` | — | 设为 `1` 自动跳过权限确认 |
 | `CLAUDE_PROXY` | — | 仅 Claude Code CLI 使用的代理 URL |
 | `CODEX_PROXY` | — | 仅 Codex CLI 使用的代理 URL |
@@ -199,7 +199,7 @@ cd ../client && npm install && npm run build
 |----------|---------|-------------|
 | `RC_USER` | `admin` | Login username |
 | `RC_PASS` | — | Login password (**required**) |
-| `PORT` | `3000` | Listen port |
+| `PORT` | `8310` | Listen port |
 | `IS_SANDBOX` | — | Set to `1` to skip permission prompts |
 | `CLAUDE_PROXY` | — | Proxy URL used only by the Claude Code CLI |
 | `CODEX_PROXY` | — | Proxy URL used only by the Codex CLI |

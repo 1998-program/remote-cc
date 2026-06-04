@@ -14,7 +14,7 @@ export const DEFAULTS = {
 
   // ── 终端 ──────────────────────────────────────
   fontSize:      13,          // px
-  fontFamily:    'jetbrains', // 见 FONT_FAMILIES
+  fontFamily:    'meslolgm',  // 见 FONT_FAMILIES
   lineHeight:    1.3,
   cursorStyle:   'block',     // 'block' | 'underline' | 'bar'
   cursorBlink:   true,
@@ -28,7 +28,7 @@ export const DEFAULTS = {
 
   // ── 远程控制 ──────────────────────────────────
   fileBrowserDefaultPath: '/', // 文件管理器默认目录
-  shellDefaultCwd: '/',        // 临时 shell 默认目录
+  shellDefaultCwd: '/',        // 共享 Shell 默认目录
   newConversationDefaultDir: '~', // 新建会话默认目录
 
   // ── 账户 ──────────────────────────────────────
@@ -254,9 +254,9 @@ export function getIcons(themeId) {
 }
 
 export const FONT_FAMILIES = [
-  { id: 'meslolgs',   name: 'MesloLGS NF',      value: "'MesloLGS NF', 'MesloLGS Nerd Font', 'MesloLGS Nerd Font Mono', monospace" },
-  { id: 'meslolgm',   name: 'MesloLGM NF',      value: "'MesloLGM NF', 'MesloLGM Nerd Font', 'MesloLGS NF', monospace" },
-  { id: 'meslolgl',   name: 'MesloLGL NF',      value: "'MesloLGL NF', 'MesloLGL Nerd Font', 'MesloLGS NF', monospace" },
+  { id: 'meslolgs',   name: 'MesloLGS NF (Small)',  value: "'RemoteCC MesloLGS NF', 'MesloLGS NF', 'MesloLGS Nerd Font', 'MesloLGS Nerd Font Mono', monospace" },
+  { id: 'meslolgm',   name: 'MesloLGM NF (Medium)', value: "'RemoteCC MesloLGM NF', 'MesloLGM NF', 'MesloLGM Nerd Font', 'RemoteCC MesloLGL NF', 'MesloLGL NF', monospace" },
+  { id: 'meslolgl',   name: 'MesloLGL NF (Large)',  value: "'RemoteCC MesloLGL NF', 'MesloLGL NF', 'MesloLGL Nerd Font', 'MesloLGS NF', monospace" },
   { id: 'jetbrains',  name: 'JetBrains Mono',   value: "'JetBrains Mono', monospace" },
   { id: 'fira',       name: 'Fira Code',        value: "'Fira Code', monospace" },
   { id: 'cascadia',   name: 'Cascadia Code',    value: "'Cascadia Code', monospace" },

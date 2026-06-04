@@ -70,15 +70,15 @@ Click the folder icon in the top bar to open the file browser. It opens at the s
 | Drag files | Drop files onto the file browser to upload them into the current directory |
 | Path input box | Type a path directly and press Enter to jump there |
 
-The settings page can configure the file browser default path, temporary shell cwd, new-session default directory, and Web login password.
+The settings page can configure the file browser default path, shell cwd, new-session default directory, and Web login password.
 
 Supported preview types: `.md` `.txt` `.py` `.js` `.ts` `.json` `.sh` `.yaml` and other code/text files, plus common image formats (`png` `jpg` `gif` `webp`).
 
 ---
 
-## Temporary Shell
+## Shared Shell
 
-Click the terminal icon in the top bar to open a temporary shell terminal. It is a normal shell PTY and does not enter the RemoteCC session list; closing the browser or page ends the process. It prefers `zsh`, then `fish`, `bash`, and `sh`; set `RCC_SHELL` or `REMOTECC_SHELL` to override it. For persistence, run `tmux` inside it.
+Click the terminal icon in the top bar to open the shared Shell. It is a normal shell PTY and does not enter the RemoteCC agent session list, but it is kept as one foreground shell session: browser disconnects or refreshes do not kill it, reopening the page replays recent output, and multiple Web clients attach to the same shell. It prefers `zsh`, then `fish`, `bash`, and `sh`; set `RCC_SHELL` or `REMOTECC_SHELL` to override it.
 
 ---
 
@@ -153,10 +153,17 @@ Inside any session: **`Ctrl+]`** goes back to the menu without killing the agent
 
 ## Changelog
 
+### 2026-06-04
+
+- **Shared shell**: Web Shell is now one foreground shared session with reconnect replay and multi-client sync
+- **Mobile terminal**: fixes mobile input and supports scrolling history, text selection/copy, default MesloLGM NF, and Shell-only `CTRL` / `ALT` / `FN` shortcuts
+- **Settings polish**: mobile UI-style previews now use full-width cards instead of narrow columns
+- **Docs screenshots**: refreshed screenshots and grouped desktop, mobile, and TUI images separately
+
 ### 2026-06-03
 
 - **Web console enhancements**: directory picker for new sessions, plus a file browser with `/` root access, folder creation, upload/download, and path copy
-- **Temporary shell**: adds a non-persistent shell terminal in the Web top bar, preferring `zsh` by default
+- **Shell terminal**: adds a normal shell terminal in the Web top bar, preferring `zsh` by default
 - **Mobile terminal**: shortcut bars are mobile-only; Shell mode uses dedicated shell shortcuts
 - **Appearance and language**: defaults to Studio + Aurora + Material, with 9 UI styles, dark/light color themes, 6 icon styles, and complete zh/en switching
 - **Settings persistence**: Web settings are saved to `~/.rcc/web-settings.json`, including default paths, themes, terminal preferences, and language
@@ -187,13 +194,31 @@ Inside any session: **`Ctrl+]`** goes back to the menu without killing the agent
 
 ## Screenshots
 
-| Web sessions | Web terminal |
-|---|---|
-| <img src="docs/assets/screenshots/web-home-desktop.png" alt="Web sessions" width="520"> | <img src="docs/assets/screenshots/web-terminal-desktop.png" alt="Web terminal" width="520"> |
+### Desktop
 
-| Mobile sessions | TUI session manager |
+| Sessions | Agent terminal |
 |---|---|
-| <img src="docs/assets/screenshots/mobile-home.jpg" alt="Mobile sessions" width="260"> | <img src="docs/assets/screenshots/tui-session-list.png" alt="TUI session manager" width="520"> |
+| <img src="docs/assets/screenshots/web-home-desktop.jpg" alt="Web sessions" width="520"> | <img src="docs/assets/screenshots/web-terminal-desktop.png" alt="Web terminal" width="520"> |
+
+| File browser | Shared Shell |
+|---|---|
+| <img src="docs/assets/screenshots/web-file-browser-desktop.jpg" alt="Web file browser" width="520"> | <img src="docs/assets/screenshots/web-shell-desktop.png" alt="Web shared shell" width="520"> |
+
+| Appearance settings | Terminal and path settings |
+|---|---|
+| <img src="docs/assets/screenshots/web-settings-appearance.jpg" alt="Appearance settings" width="520"> | <img src="docs/assets/screenshots/web-settings-terminal.jpg" alt="Terminal and path settings" width="520"> |
+
+### Mobile
+
+| Sessions | Agent terminal | File browser | Settings |
+|---|---|---|---|
+| <img src="docs/assets/screenshots/mobile-home.jpg" alt="Mobile sessions" width="220"> | <img src="docs/assets/screenshots/mobile-terminal.jpg" alt="Mobile terminal" width="220"> | <img src="docs/assets/screenshots/mobile-file-browser.jpg" alt="Mobile file browser" width="220"> | <img src="docs/assets/screenshots/mobile-settings.jpg" alt="Mobile settings" width="220"> |
+
+### TUI
+
+| Session list | Session actions |
+|---|---|
+| <img src="docs/assets/screenshots/tui-session-list.png" alt="TUI session list" width="420"> | <img src="docs/assets/screenshots/tui-session-actions.png" alt="TUI session actions" width="420"> |
 
 ---
 

@@ -1,0 +1,95 @@
+@font-face {
+  font-family: 'RemoteCC MesloLGS NF';
+  src: url('/fonts/meslo/meslolgs-nf-regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'RemoteCC MesloLGS NF';
+  src: url('/fonts/meslo/meslolgs-nf-bold.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'RemoteCC MesloLGS NF';
+  src: url('/fonts/meslo/meslolgs-nf-italic.woff2') format('woff2');
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'RemoteCC MesloLGS NF';
+  src: url('/fonts/meslo/meslolgs-nf-bold-italic.woff2') format('woff2');
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'RemoteCC MesloLGL NF';
+  src: url('/fonts/meslo/meslolgl-nf-regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'RemoteCC MesloLGL NF';
+  src: url('/fonts/meslo/meslolgl-nf-bold.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'RemoteCC MesloLGL NF';
+  src: url('/fonts/meslo/meslolgl-nf-italic.woff2') format('woff2');
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'RemoteCC MesloLGL NF';
+  src: url('/fonts/meslo/meslolgl-nf-bold-italic.woff2') format('woff2');
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'RemoteCC MesloLGM NF';
+  src: url('/fonts/meslo/meslolgm-nf-regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'RemoteCC MesloLGM NF';
+  src: url('/fonts/meslo/meslolgm-nf-bold.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'RemoteCC MesloLGM NF';
+  src: url('/fonts/meslo/meslolgm-nf-italic.woff2') format('woff2');
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'RemoteCC MesloLGM NF';
+  src: url('/fonts/meslo/meslolgm-nf-bold-italic.woff2') format('woff2');
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+}

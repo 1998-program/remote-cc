@@ -11,7 +11,7 @@ const DEFAULTS = {
   topbarHeight: 44,
 
   fontSize: 13,
-  fontFamily: 'jetbrains',
+  fontFamily: 'meslolgm',
   lineHeight: 1.3,
   cursorStyle: 'block',
   cursorBlink: true,

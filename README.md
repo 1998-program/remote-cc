@@ -72,13 +72,13 @@ Web 端终端支持三种方式向 Claude Code 或 Codex 传递文件：
 
 支持预览的文件类型：`.md` `.txt` `.py` `.js` `.ts` `.json` `.sh` `.yaml` 等代码和文本文件，以及常见图片格式（`png` `jpg` `gif` `webp`）。
 
-设置页可以配置文件浏览器默认打开目录、临时 Shell 默认目录、新建会话默认目录，也支持修改 Web 登录密码。
+设置页可以配置文件浏览器默认打开目录、Shell 默认目录、新建会话默认目录，也支持修改 Web 登录密码。
 
 ---
 
-## 临时 Shell
+## 共享 Shell
 
-点击顶栏终端图标打开临时终端。它是普通 shell PTY，不进入 RemoteCC 会话列表；浏览器断开或关闭该页面后进程会结束。默认优先使用 `zsh`，其次 `fish`、`bash`、`sh`；也可以用 `RCC_SHELL` 或 `REMOTECC_SHELL` 指定。需要长期保持时，建议在里面使用 `tmux`。
+点击顶栏终端图标打开共享 Shell。它是普通 shell PTY，不进入 RemoteCC Agent 会话列表，但会作为一个前台 Shell 会话保留：浏览器断开或刷新不会杀进程，重新打开会回放最近输出，多端打开会同步同一个 Shell。默认优先使用 `zsh`，其次 `fish`、`bash`、`sh`；也可以用 `RCC_SHELL` 或 `REMOTECC_SHELL` 指定。
 
 ---
 
@@ -153,10 +153,17 @@ remotecc attach <名称>  # 直接进入指定名称的会话
 
 ## 更新日志
 
+### 2026-06-04
+
+- **共享 Shell**：Web Shell 改为单个前台共享会话，支持断线重连、历史回放和多端同步
+- **移动端终端**：修复手机端无法输入的问题，并支持上滑查看历史、文本选择复制、默认 MesloLGM NF 字体和 Shell 专用 `CTRL` / `ALT` / `FN` 快捷键
+- **设置页优化**：移动端 UI 风格预览改为整宽卡片，避免预览图被窄列压扁
+- **文档截图**：接入新版截图，按桌面、手机、TUI 分组展示
+
 ### 2026-06-03
 
 - **Web 控制台增强**：新建会话支持目录选择；文件浏览器支持 `/` 根目录、新建文件夹、上传下载和路径复制
-- **临时 Shell**：Web 顶栏新增不持久化的普通 shell 终端，默认优先使用 `zsh`
+- **Shell 终端**：Web 顶栏新增普通 shell 终端，默认优先使用 `zsh`
 - **移动端终端**：快捷键栏仅在手机端显示，Shell 模式使用专用 shell 快捷键
 - **外观与语言**：默认 Studio + Aurora + Material，支持 9 种 UI 风格、深/浅多套配色、6 种图标风格和完整中英文切换
 - **设置持久化**：Web 设置保存到 `~/.rcc/web-settings.json`，默认目录、主题、终端偏好和语言重启后仍然有效
@@ -187,13 +194,31 @@ remotecc attach <名称>  # 直接进入指定名称的会话
 
 ## 截图
 
-| Web 会话列表 | Web 终端 |
-|---|---|
-| <img src="docs/assets/screenshots/web-home-desktop.png" alt="Web 会话列表" width="520"> | <img src="docs/assets/screenshots/web-terminal-desktop.png" alt="Web 终端" width="520"> |
+### 桌面端
 
-| 移动端会话列表 | TUI 会话管理 |
+| 会话列表 | Agent 终端 |
 |---|---|
-| <img src="docs/assets/screenshots/mobile-home.jpg" alt="移动端会话列表" width="260"> | <img src="docs/assets/screenshots/tui-session-list.png" alt="TUI 会话管理" width="520"> |
+| <img src="docs/assets/screenshots/web-home-desktop.jpg" alt="Web 会话列表" width="520"> | <img src="docs/assets/screenshots/web-terminal-desktop.png" alt="Web 终端" width="520"> |
+
+| 文件浏览器 | 共享 Shell |
+|---|---|
+| <img src="docs/assets/screenshots/web-file-browser-desktop.jpg" alt="Web 文件浏览器" width="520"> | <img src="docs/assets/screenshots/web-shell-desktop.png" alt="Web 共享 Shell" width="520"> |
+
+| 外观设置 | 终端与目录设置 |
+|---|---|
+| <img src="docs/assets/screenshots/web-settings-appearance.jpg" alt="外观设置" width="520"> | <img src="docs/assets/screenshots/web-settings-terminal.jpg" alt="终端与目录设置" width="520"> |
+
+### 手机端
+
+| 会话列表 | Agent 终端 | 文件浏览器 | 设置 |
+|---|---|---|---|
+| <img src="docs/assets/screenshots/mobile-home.jpg" alt="移动端会话列表" width="220"> | <img src="docs/assets/screenshots/mobile-terminal.jpg" alt="移动端终端" width="220"> | <img src="docs/assets/screenshots/mobile-file-browser.jpg" alt="移动端文件浏览器" width="220"> | <img src="docs/assets/screenshots/mobile-settings.jpg" alt="移动端设置" width="220"> |
+
+### TUI
+
+| 会话列表 | 会话操作 |
+|---|---|
+| <img src="docs/assets/screenshots/tui-session-list.png" alt="TUI 会话列表" width="420"> | <img src="docs/assets/screenshots/tui-session-actions.png" alt="TUI 会话操作" width="420"> |
 
 ---
 

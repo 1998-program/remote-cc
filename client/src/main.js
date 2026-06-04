@@ -1,6 +1,7 @@
 import { createApp, watch } from 'vue';
 import App from './App.vue';
 import { settings, getTheme } from './settings.js';
+import './assets/fonts.css';
 
 const app = createApp(App);
 app.mount('#app');

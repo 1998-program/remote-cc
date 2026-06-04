@@ -63,6 +63,15 @@ function start() {
       const msg = JSON.parse(data);
       if (!msg?.type) throw 0;
       if (msg.type === 'session_list') return;
+      if (msg.type === 'shell_replay_start') {
+        terminalRef.value?.clear?.();
+        return;
+      }
+      if (msg.type === 'shell_replay_end') {
+        terminalRef.value?.fit?.();
+        nextTick(() => terminalRef.value?.scrollToBottom?.());
+        return;
+      }
       if (msg.type === 'shell_ready') {
         clearTimeout(readyTimer);
         status.value = 'connected';
@@ -126,7 +135,7 @@ function onPaste(text) {
 }
 
 onMounted(start);
-onBeforeUnmount(() => cleanup(true));
+onBeforeUnmount(() => cleanup(false));
 </script>
 
 <style scoped>

@@ -192,7 +192,7 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue';
-import { login, isLoggedIn, getSavedUsername, createWS, api, setUnauthorizedHandler } from './api/index.js';
+import { login, logout, isLoggedIn, getSavedUsername, createWS, api, setUnauthorizedHandler } from './api/index.js';
 import Terminal          from './components/Terminal.vue';
 import LogViewer         from './components/LogViewer.vue';
 import ConversationList  from './components/ConversationList.vue';
@@ -571,7 +571,7 @@ function closeShell() {
 }
 
 function doLogout() {
-  import('./api/index.js').then(({ logout }) => logout());
+  logout();
   authed.value = false;
   view.value = 'home';
   shellActive.value = false;

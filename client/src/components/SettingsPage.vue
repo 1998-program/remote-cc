@@ -461,6 +461,8 @@ async function changePassword() {
   display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
 }
 .sp-style-card {
+  width: 100%;
+  min-width: 0;
   background: color-mix(in srgb, var(--panel) 82%, transparent); border: 1px solid var(--border);
   border-radius: var(--radius); padding: 10px 8px 8px;
   cursor: pointer; text-align: left;
@@ -486,6 +488,8 @@ async function changePassword() {
 
 /* UI Style previews */
 .sp-style-preview {
+  width: 100%;
+  min-width: 0;
   border-radius: var(--radius-sm); height: 62px; overflow: hidden;
   display: flex; flex-direction: column;
 }
@@ -975,7 +979,9 @@ async function changePassword() {
   .sp-color-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .sp-language-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .sp-icon-style-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .sp-style-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .sp-style-grid { grid-template-columns: 1fr; gap: 10px; }
+  .sp-style-card { padding: 12px; }
+  .sp-style-preview { height: 84px; }
   .sp-password-grid { grid-template-columns: 1fr; }
 }
 
