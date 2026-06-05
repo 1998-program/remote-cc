@@ -110,7 +110,7 @@
         <div v-show="view === 'home'" class="home-view">
           <ConversationList
             :sessions="sessionList"
-            :loading="!wsReady"
+            :loading="sessionsLoading"
             @open="openSession"
             @new="view = 'new-session'"
             @kill="killSession"
@@ -148,7 +148,7 @@
           />
         </div>
 
-        <!-- ── Ephemeral shell ──────────────────────────────────────── -->
+        <!-- ── Shared shell ─────────────────────────────────────────── -->
         <div v-if="shellActive" v-show="view === 'shell'" class="shell-view">
           <ShellTerminal
             :theme="theme"
@@ -245,34 +245,110 @@ async function doLogin() {
 let controlWS = null;
 let reconnTimer = null;
 const wsReady = ref(false);
+const WS_FALLBACK_DELAY = 3000;
+const HTTP_POLL_WAIT = 20000;
+const CONTROL_HTTP_POLL_WAIT = 3000;
+const CONTROL_WS_FALLBACK_DELAY = 2000;
+let controlHttpTimer = null;
+let controlFallbackTimer = null;
+let controlHttpRun = 0;
+
+const sessionList = ref([]);
+const sessionsLoading = ref(true);
+const aliveSessions = computed(() => sessionList.value.filter(s => s.alive));
+const deadSessions  = computed(() => sessionList.value.filter(s => !s.alive));
+
+function applySessionList(sessions) {
+  sessionList.value = Array.isArray(sessions) ? sessions : [];
+  sessionsLoading.value = false;
+}
 
 function initControlWS() {
+  refreshSessionList();
+  startControlHttpFallback(CONTROL_WS_FALLBACK_DELAY);
+
   if (controlWS && controlWS.readyState < 2) return;
   controlWS = createWS();
-  controlWS.onopen    = () => { wsReady.value = true; };
+  controlWS.onopen    = () => {
+    wsReady.value = true;
+    clearTimeout(controlFallbackTimer);
+    stopControlHttpPolling();
+  };
   controlWS.onmessage = (evt) => {
     try {
       const msg = JSON.parse(evt.data);
-      if (msg.type === 'session_list') sessionList.value = msg.sessions;
+      if (msg.type === 'session_list') applySessionList(msg.sessions);
     } catch (_) {}
   };
   controlWS.onclose   = () => {
     wsReady.value = false;
+    clearTimeout(controlFallbackTimer);
     // WS 断开时验证 token 是否仍有效；401 会由 setUnauthorizedHandler 处理
-    api.getActiveSessions().catch(() => {});
+    refreshSessionList();
+    startControlHttpFallback(0);
     reconnTimer = setTimeout(initControlWS, 3000);
   };
-  controlWS.onerror   = () => {};
+  controlWS.onerror   = () => {
+    if (!wsReady.value) startControlHttpFallback(0);
+  };
+}
+
+function refreshSessionList() {
+  return api.getActiveSessions()
+    .then(applySessionList)
+    .catch(() => {});
+}
+
+function stopControlHttpPolling() {
+  controlHttpRun++;
+  clearTimeout(controlHttpTimer);
+  controlHttpTimer = null;
+}
+
+function startControlHttpFallback(delay = CONTROL_HTTP_POLL_WAIT) {
+  if (!authed.value) return;
+  clearTimeout(controlFallbackTimer);
+  controlFallbackTimer = setTimeout(() => {
+    if (!authed.value || wsReady.value) return;
+    startControlHttpPolling(0);
+  }, Math.max(0, delay));
+}
+
+function startControlHttpPolling(delay = 0) {
+  if (!authed.value || wsReady.value) return;
+  const run = ++controlHttpRun;
+  clearTimeout(controlHttpTimer);
+  controlHttpTimer = setTimeout(async () => {
+    if (run !== controlHttpRun || !authed.value || wsReady.value) return;
+    await refreshSessionList();
+    if (run === controlHttpRun && authed.value && !wsReady.value) {
+      startControlHttpPolling(CONTROL_HTTP_POLL_WAIT);
+    }
+  }, Math.max(0, delay));
+}
+
+function sendControlHttp(obj) {
+  let request = null;
+  if (obj?.type === 'kill' && obj.sessionId) {
+    request = api.terminal.kill(obj.sessionId);
+  } else if (obj?.type === 'delete' && obj.sessionId) {
+    request = api.terminal.deleteSession(obj.sessionId);
+  } else if (obj?.type === 'rename' && obj.sessionId) {
+    request = api.terminal.rename(obj.sessionId, obj.name || '');
+  } else if (obj?.type === 'list') {
+    request = Promise.resolve({ ok: true });
+  }
+  if (!request) return;
+  request.then(refreshSessionList).catch(() => {});
 }
 
 function sendControl(obj) {
-  if (controlWS?.readyState === 1) controlWS.send(JSON.stringify(obj));
+  if (controlWS?.readyState === WebSocket.OPEN) {
+    controlWS.send(JSON.stringify(obj));
+    return;
+  }
+  sendControlHttp(obj);
 }
-
-// ── Session list (from server) ────────────────────────────────────────────────
-const sessionList = ref([]);
-const aliveSessions = computed(() => sessionList.value.filter(s => s.alive));
-const deadSessions  = computed(() => sessionList.value.filter(s => !s.alive));
 
 // ── Terminal sessions (client-side instances) ─────────────────────────────────
 // termList: reactive array of session objects — Vue can track array mutations
@@ -298,11 +374,27 @@ function connectEntryWS(entry) {
   let destroyed = false;
   let reconnDelay = 1000;
   let reconnTimeout = null;
+  let fallbackTimer = null;
+  let opened = false;
 
   const ws = createWS();
   entry.ws = ws;
+  entry.transport = 'ws';
+
+  function switchToHttpFallback() {
+    if (destroyed || opened) return;
+    destroyed = true;
+    clearTimeout(reconnTimeout);
+    clearTimeout(fallbackTimer);
+    try { ws.close(); } catch (_) {}
+    startEntryHttp(entry);
+  }
+
+  fallbackTimer = setTimeout(switchToHttpFallback, WS_FALLBACK_DELAY);
 
   ws.onopen = () => {
+    opened = true;
+    clearTimeout(fallbackTimer);
     reconnDelay = 1000;
 
     // nextTick 确保 Terminal 组件已 mount 并完成初始 fit
@@ -362,10 +454,13 @@ function connectEntryWS(entry) {
           return;
         }
         case 'session_list':
-          sessionList.value = msg.sessions;
+          applySessionList(msg.sessions);
           return;
-        case 'replay_start':
+        case 'replay_start': {
+          const el = termRefs[entry.sid];
+          if (el) el.clear();
           return;
+        }
         case 'replay_end': {
           const el = termRefs[entry.sid];
           if (el) {
@@ -377,20 +472,7 @@ function connectEntryWS(entry) {
           return;
         }
         case 'exit': {
-          entry.alive = false;
-          const el = termRefs[entry.sid];
-          if (el) el.write(`\r\n\x1b[33m[${t.value.exited} ${msg.exitCode}]\x1b[0m\r\n`);
-          // CC 退出后自动清理会话，延迟 1.5s 让用户看到退出消息
-          setTimeout(() => {
-            const sid = entry.sid;
-            entry._destroy?.();
-            const idx = termList.findIndex(e => e.sid === sid);
-            if (idx !== -1) { delete termRefs[sid]; termList.splice(idx, 1); }
-            if (activeSessionId.value === sid) {
-              activeSessionId.value = '';
-              view.value = 'home';
-            }
-          }, 1500);
+          handleEntryExit(entry, msg.exitCode);
           return;
         }
         case 'error': {
@@ -410,10 +492,17 @@ function connectEntryWS(entry) {
     if (el) el.write(data);
   };
 
-  ws.onerror = () => {};
+  ws.onerror = () => {
+    if (!opened) switchToHttpFallback();
+  };
 
   ws.onclose = () => {
+    clearTimeout(fallbackTimer);
     if (destroyed) return;
+    if (!opened) {
+      switchToHttpFallback();
+      return;
+    }
     const el = termRefs[entry.sid];
     if (el) el.write(`\r\n\x1b[33m[${t.value.disconnected} ${(reconnDelay/1000).toFixed(1)}${t.value.reconnecting}]\x1b[0m\r\n`);
     reconnTimeout = setTimeout(() => {
@@ -426,8 +515,111 @@ function connectEntryWS(entry) {
   entry._destroy = () => {
     destroyed = true;
     clearTimeout(reconnTimeout);
+    clearTimeout(fallbackTimer);
     try { ws.close(); } catch (_) {}
   };
+}
+
+function applyHttpSessionSnapshot(entry, snapshot, shouldClear = false) {
+  if (!snapshot) return;
+  const realId = snapshot.sessionId;
+  if (realId && entry.sid !== realId) {
+    const oldSid = entry.sid;
+    const el = termRefs[oldSid];
+    delete termRefs[oldSid];
+    entry.sid = realId;
+    if (el) termRefs[realId] = el;
+    if (activeSessionId.value === oldSid) activeSessionId.value = realId;
+    entry.attachSessionId = realId;
+    localStorage.setItem('rcc_last_session', realId);
+  }
+  if (snapshot.name) entry.name = snapshot.name;
+  if (typeof snapshot.alive === 'boolean') entry.alive = snapshot.alive;
+
+  const el = termRefs[entry.sid];
+  if ((shouldClear || snapshot.reset) && el) el.clear();
+  if (snapshot.output && el) el.write(snapshot.output);
+  if (el && snapshot.output) nextTick(() => el.scrollToBottom());
+}
+
+function handleEntryExit(entry, exitCode) {
+  if (entry._exitHandled) return;
+  entry._exitHandled = true;
+  entry.alive = false;
+  const el = termRefs[entry.sid];
+  if (el) el.write(`\r\n\x1b[33m[${t.value.exited} ${exitCode}]\x1b[0m\r\n`);
+  setTimeout(() => {
+    const sid = entry.sid;
+    entry._destroy?.();
+    const idx = termList.findIndex(e => e.sid === sid);
+    if (idx !== -1) { delete termRefs[sid]; termList.splice(idx, 1); }
+    if (activeSessionId.value === sid) {
+      activeSessionId.value = '';
+      view.value = 'home';
+    }
+  }, 1500);
+}
+
+function handleHttpExit(entry, exitCode) {
+  handleEntryExit(entry, exitCode);
+}
+
+async function startEntryHttp(entry) {
+  if (entry._destroy) { entry._destroy(); entry._destroy = null; }
+
+  let destroyed = false;
+  let retryDelay = 1000;
+  entry.transport = 'http';
+  entry.ws = null;
+
+  const poll = async (cursor) => {
+    while (!destroyed) {
+      try {
+        const result = await api.terminal.poll(entry.attachSessionId || entry.sid, cursor, HTTP_POLL_WAIT);
+        retryDelay = 1000;
+        if (destroyed) return;
+        if (result.reset) termRefs[entry.sid]?.clear?.();
+        if (result.output) termRefs[entry.sid]?.write?.(result.output);
+        cursor = result.cursor ?? cursor;
+        if (result.alive === false) {
+          handleHttpExit(entry, result.exitCode);
+          return;
+        }
+      } catch (_) {
+        if (destroyed) return;
+        termRefs[entry.sid]?.write?.(`\r\n\x1b[33m[${t.value.disconnected} ${(retryDelay/1000).toFixed(1)}${t.value.reconnecting}]\x1b[0m\r\n`);
+        await new Promise(resolve => setTimeout(resolve, retryDelay));
+        retryDelay = Math.min(retryDelay * 1.5, 15000);
+      }
+    }
+  };
+
+  entry._destroy = () => { destroyed = true; };
+
+  try {
+    await nextTick();
+    const el = termRefs[entry.sid];
+    if (el) el.fit();
+    const cols = el?.getCols?.() ?? 80;
+    const rows = el?.getRows?.() ?? 24;
+    const snapshot = entry.attachSessionId
+      ? await api.terminal.attach(entry.attachSessionId, { cols, rows })
+      : await api.terminal.start({
+          workingDir: entry.workingDir,
+          agent: entry.agent || 'claude',
+          resumeSessionId: entry.resumeSessionId || '',
+          name: entry.name,
+          cols,
+          rows,
+        });
+    if (destroyed) return;
+    applyHttpSessionSnapshot(entry, snapshot, !!entry.attachSessionId);
+    poll(snapshot.cursor ?? 0);
+  } catch (e) {
+    if (destroyed) return;
+    const el = termRefs[entry.sid];
+    if (el) el.write(`\r\n\x1b[31m[${t.value.error_prefix}${e.message}]\x1b[0m\r\n`);
+  }
 }
 
 // ── Navigation ────────────────────────────────────────────────────────────────
@@ -577,7 +769,11 @@ function doLogout() {
   shellActive.value = false;
   remoteSettingsReady = false;
   clearTimeout(settingsSaveTimer);
+  clearTimeout(reconnTimer);
+  clearTimeout(controlFallbackTimer);
+  stopControlHttpPolling();
   settings.username = '';
+  sessionsLoading.value = true;
 }
 
 // token 失效时（服务重启等）自动回到登录页
@@ -589,10 +785,13 @@ setUnauthorizedHandler(() => {
   clearTimeout(settingsSaveTimer);
   // 清理所有 WS 连接
   clearTimeout(reconnTimer);
+  clearTimeout(controlFallbackTimer);
+  stopControlHttpPolling();
   controlWS?.close();
   for (const entry of termList) entry._destroy?.();
   termList.splice(0);
   sessionList.value = [];
+  sessionsLoading.value = true;
 });
 
 // ── Settings persistence ──────────────────────────────────────────────────────
@@ -646,7 +845,16 @@ watch(settings, queueSettingsSave, { deep: true });
 // Terminal event handlers
 function onTermInput(sid, data) {
   const entry = findEntry(sid);
-  if (entry?.ws?.readyState === WebSocket.OPEN) entry.ws.send(data);
+  if (entry?.ws?.readyState === WebSocket.OPEN) {
+    entry.ws.send(data);
+  } else if (entry?.transport === 'http') {
+    const el = termRefs[sid];
+    api.terminal.input(entry.attachSessionId || entry.sid, {
+      data,
+      cols: el?.getCols?.() ?? 80,
+      rows: el?.getRows?.() ?? 24,
+    }).catch(() => {});
+  }
   // 同步更新当前行追踪（键盘输入已由 terminal 内部 onData 处理，
   // 但 SymbolBar 的输入绕过了 onData，所以这里统一补充）
   const el = termRefs[sid];
@@ -654,12 +862,24 @@ function onTermInput(sid, data) {
 }
 function onTermResize(sid, { cols, rows }) {
   const entry = findEntry(sid);
-  if (entry?.ws?.readyState === WebSocket.OPEN)
+  if (entry?.ws?.readyState === WebSocket.OPEN) {
     entry.ws.send(JSON.stringify({ type: 'resize', cols, rows }));
+  } else if (entry?.transport === 'http') {
+    api.terminal.resize(entry.attachSessionId || entry.sid, { cols, rows }).catch(() => {});
+  }
 }
 function onTermPaste(sid, text) {
   const entry = findEntry(sid);
-  if (entry?.ws?.readyState === WebSocket.OPEN) entry.ws.send(text);
+  if (entry?.ws?.readyState === WebSocket.OPEN) {
+    entry.ws.send(text);
+  } else if (entry?.transport === 'http') {
+    const el = termRefs[sid];
+    api.terminal.input(entry.attachSessionId || entry.sid, {
+      data: text,
+      cols: el?.getCols?.() ?? 80,
+      rows: el?.getRows?.() ?? 24,
+    }).catch(() => {});
+  }
 }
 
 // 文件浏览器 → 向当前活跃终端发送文本（如 cd 命令）
@@ -675,6 +895,14 @@ function sendToActiveTerminal(text) {
   if (entry?.ws?.readyState === WebSocket.OPEN) {
     entry.ws.send(text);
     view.value = 'terminal';
+  } else if (entry?.transport === 'http') {
+    const el = termRefs[sid];
+    api.terminal.input(entry.attachSessionId || entry.sid, {
+      data: text,
+      cols: el?.getCols?.() ?? 80,
+      rows: el?.getRows?.() ?? 24,
+    }).catch(() => {});
+    view.value = 'terminal';
   }
 }
 function setTermRef(sid, el) {
@@ -686,6 +914,7 @@ function setTermRef(sid, el) {
 async function tryRestore() {
   try {
     const sessions = await api.getActiveSessions();
+    applySessionList(sessions);
     const lastId = localStorage.getItem('rcc_last_session');
     const alive = sessions.find(s => s.sessionId === lastId && s.alive);
     if (alive) openSession(alive);
@@ -723,6 +952,7 @@ function init() {
   const r = route.value;
   if (r.name === 'session' && r.params.id) {
     api.getActiveSessions().then(sessions => {
+      applySessionList(sessions);
       const s = sessions.find(x => x.sessionId === r.params.id && x.alive);
       if (s) openSession(s);
       else { navigate('home'); tryRestore(); }
@@ -757,6 +987,8 @@ onMounted(() => {
 onBeforeUnmount(() => {
   clearTimeout(reconnTimer);
   clearTimeout(settingsSaveTimer);
+  clearTimeout(controlFallbackTimer);
+  stopControlHttpPolling();
   controlWS?.close();
   for (const entry of termList) entry._destroy?.();
   document.removeEventListener('click', onDocClick);

@@ -19,6 +19,8 @@ Agent PTY（持续运行）
 
 无论从哪端输入，所有端实时可见。PTY 独立于客户端运行——关闭浏览器或断开 SSH，Agent 在后台继续工作。
 
+Web 端默认使用 WebSocket 获取实时状态并传输终端数据；如果接入网关不支持 WebSocket Upgrade，首页会通过 HTTP 轮询刷新会话列表，终端会自动切换到 HTTP 长轮询回退模式。
+
 ---
 
 ### Web 界面
@@ -71,6 +73,8 @@ Agent PTY（持续运行）
 #### 共享 Shell（右上角终端图标）
 
 终端按钮会打开一个普通 shell PTY。它不进入 Agent 会话列表，但会作为单个前台 Shell 会话保留：关闭页面、断网或刷新不会杀进程，重新打开会回放最近输出；多个 Web 端打开终端图标时会同步同一个 Shell。默认优先使用 `zsh`，其次 `fish`、`bash`、`sh`；可通过 `RCC_SHELL` 或 `REMOTECC_SHELL` 指定。
+
+如果 WebSocket 不可用，Shell 会自动切换到 HTTP 长轮询传输，并在断连后继续重试。
 
 #### 设置页（右上角设置图标）
 
@@ -190,6 +194,8 @@ Agent PTY (always running)
 
 Input from any client is visible to all others in real time. The PTY runs independently — closing the browser or dropping SSH does not interrupt the agent.
 
+The Web client uses WebSocket for live state and terminal transport by default. If the access gateway does not support WebSocket Upgrade, the home page refreshes the session list by HTTP polling, and terminals automatically switch to HTTP long-polling fallback.
+
 ---
 
 ### Web Interface
@@ -242,6 +248,8 @@ Click the folder icon to open the file browser, which defaults to the server roo
 #### Shared Shell (terminal icon, top right)
 
 The terminal button opens a normal shell PTY. It does not enter the agent session list, but it is kept as one foreground shell session: closing the page, network disconnects, or refreshes do not kill it, reopening replays recent output, and multiple Web clients attach to the same shell. It prefers `zsh`, then `fish`, `bash`, and `sh`; set `RCC_SHELL` or `REMOTECC_SHELL` to override it.
+
+If WebSocket is unavailable, Shell automatically switches to HTTP long-polling transport and keeps retrying after disconnects.
 
 #### Settings (settings icon, top right)
 

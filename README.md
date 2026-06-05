@@ -30,6 +30,7 @@ Claude Code / Codex 都是跑在终端里的 AI 编程助手，功能强大，�
 
 - **真实终端** — 颜色、交互、鼠标全支持，和直接在本机用没有区别
 - **实时多端同步** — 手机、平板、电脑同时接入同一个 Agent 会话
+- **HTTP 回退传输** — WebSocket 被反代或接入网关拦截时，首页、Agent 终端和共享 Shell 自动改走 HTTP
 - **持久会话** — 关闭浏览器或断开 SSH，Agent 在后台继续跑，随时 reconnect
 - **历史恢复** — 读取 Claude Code / Codex 历史，自动按工作目录恢复上次对话
 - **目录式新建任务** — 新建会话时可从服务器目录树选择工作目录
@@ -90,7 +91,7 @@ Web 端终端支持三种方式向 Claude Code 或 Codex 传递文件：
           ┌─────────────────┼─────────────────┐
           ▼                 ▼                 ▼
     手机浏览器          电脑浏览器         本地终端
-    (WebSocket)       (WebSocket)      (Unix Socket)
+  (WS/HTTP回退)     (WS/HTTP回退)    (Unix Socket)
           │                 │                 │
           └────────┬────────┘                 │
                    ▼                          │
@@ -153,6 +154,12 @@ remotecc attach <名称>  # 直接进入指定名称的会话
 
 ## 更新日志
 
+### 2026-06-05
+
+- **HTTP 回退传输**：WebSocket 不可用时，首页会话列表改用 HTTP 轮询，Agent 终端和共享 Shell 自动切换到 HTTP 长轮询
+- **反代兼容性**：补齐 `kill` / `delete` / `rename` 等会话控制操作的 HTTP 回退，支持不透传 WebSocket Upgrade 的接入层
+- **幂等性处理**：会话启动/接入、Shell 启动、resize、kill/delete 等控制操作可重复调用；终端输入保持非幂等，避免自动重试导致命令重复
+
 ### 2026-06-04
 
 - **共享 Shell**：Web Shell 改为单个前台共享会话，支持断线重连、历史回放和多端同步
@@ -168,6 +175,9 @@ remotecc attach <名称>  # 直接进入指定名称的会话
 - **外观与语言**：默认 Studio + Aurora + Material，支持 9 种 UI 风格、深/浅多套配色、6 种图标风格和完整中英文切换
 - **设置持久化**：Web 设置保存到 `~/.rcc/web-settings.json`，默认目录、主题、终端偏好和语言重启后仍然有效
 - **TUI 断开修复**：修复 `rcc-tui` 新建会话后第一次 `Ctrl+]` 无法正常回菜单的问题
+
+<details>
+<summary>更早更新</summary>
 
 ### 2026-05-21
 
@@ -189,6 +199,8 @@ remotecc attach <名称>  # 直接进入指定名称的会话
 - **remotecc update**：一键更新，自动判断是否需要重启
 - **remotecc attach**：直接进入指定会话，断开后回到菜单而非退出终端
 - **登录页跳转**：服务重启后浏览器自动跳回登录页，不再白屏
+
+</details>
 
 ---
 

@@ -114,6 +114,55 @@ export const api = {
   getSession:         (sessionId, agent = 'claude') => apiFetch(`/api/session/${encodeURIComponent(sessionId)}?agent=${encodeURIComponent(agent)}`),
   getActiveSessions:  ()           => apiFetch('/api/active-sessions'),
   getSessionLog:      (sessionId, bytes = 50000) => apiFetchText(`/api/session-log/${encodeURIComponent(sessionId)}?bytes=${bytes}`),
+  terminal: {
+    start:  (payload) => apiFetch('/api/terminal/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload || {}),
+    }),
+    attach: (sessionId, payload) => apiFetch(`/api/terminal/${encodeURIComponent(sessionId)}/attach`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload || {}),
+    }),
+    input:  (sessionId, payload) => apiFetch(`/api/terminal/${encodeURIComponent(sessionId)}/input`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload || {}),
+    }),
+    resize: (sessionId, payload) => apiFetch(`/api/terminal/${encodeURIComponent(sessionId)}/resize`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload || {}),
+    }),
+    kill:   (sessionId) => apiFetch(`/api/terminal/${encodeURIComponent(sessionId)}/kill`, { method: 'POST' }),
+    deleteSession: (sessionId) => apiFetch(`/api/terminal/${encodeURIComponent(sessionId)}/delete`, { method: 'POST' }),
+    rename: (sessionId, name) => apiFetch(`/api/terminal/${encodeURIComponent(sessionId)}/rename`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name }),
+    }),
+    poll:   (sessionId, cursor = 0, wait = 20000) => apiFetch(`/api/terminal/${encodeURIComponent(sessionId)}/poll?cursor=${encodeURIComponent(cursor)}&wait=${encodeURIComponent(wait)}`),
+  },
+  shell: {
+    start:  (payload) => apiFetch('/api/shell/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload || {}),
+    }),
+    input:  (payload) => apiFetch('/api/shell/input', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload || {}),
+    }),
+    resize: (payload) => apiFetch('/api/shell/resize', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload || {}),
+    }),
+    kill:   () => apiFetch('/api/shell/kill', { method: 'POST' }),
+    poll:   (cursor = 0, wait = 20000) => apiFetch(`/api/shell/poll?cursor=${encodeURIComponent(cursor)}&wait=${encodeURIComponent(wait)}`),
+  },
   fs: {
     list:  (path, hidden = false) => apiFetch(`/api/fs/list?path=${encodeURIComponent(path)}&hidden=${hidden}`),
     read:  (path, maxBytes = 102400) => apiFetch(`/api/fs/read?path=${encodeURIComponent(path)}&maxBytes=${maxBytes}`),

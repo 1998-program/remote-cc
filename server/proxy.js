@@ -32,6 +32,9 @@ const {
 const {
   handleMessage, closeWS, listSessions, readLog,
   registerWS, unregisterWS,
+  startSessionHttp, attachSessionHttp, inputSessionHttp, resizeSessionHttp, pollSessionHttp,
+  killSessionHttp, deleteSessionHttp, renameSessionHttp,
+  startShellHttp, inputShellHttp, resizeShellHttp, pollShellHttp, killShellHttp,
 } = require('./pty-manager');
 
 const PORT = Math.max(1, Math.min(65535, parseInt(process.env.PORT) || 8310));
@@ -114,8 +117,103 @@ function isSessionLogPath(url) {
   return url.startsWith('/api/session-log/');
 }
 
+function replyResult(res, fn) {
+  Promise.resolve()
+    .then(fn)
+    .then(result => jsonReply(res, 200, result))
+    .catch(err => jsonReply(res, err.status || 500, { error: err.message || 'Internal server error' }));
+}
+
+function withJsonBody(req, res, fn) {
+  readJsonBody(req, body => replyResult(res, () => fn(body)));
+}
+
+function terminalHttpRoute(req, res, urlPath, query) {
+  if (req.method === 'POST' && urlPath === '/api/terminal/start') {
+    withJsonBody(req, res, body => startSessionHttp(body));
+    return true;
+  }
+
+  const match = urlPath.match(/^\/api\/terminal\/([^/]+)\/(attach|input|resize|poll|kill|delete|rename)$/);
+  if (!match) return false;
+
+  let sessionId;
+  try { sessionId = decodeURIComponent(match[1]); }
+  catch (_) {
+    jsonReply(res, 400, { error: 'Bad request' });
+    return true;
+  }
+  const action = match[2];
+
+  if (req.method === 'POST' && action === 'attach') {
+    withJsonBody(req, res, body => attachSessionHttp(sessionId, body));
+    return true;
+  }
+  if (req.method === 'POST' && action === 'input') {
+    withJsonBody(req, res, body => inputSessionHttp(sessionId, body));
+    return true;
+  }
+  if (req.method === 'POST' && action === 'resize') {
+    withJsonBody(req, res, body => resizeSessionHttp(sessionId, body));
+    return true;
+  }
+  if (req.method === 'GET' && action === 'poll') {
+    replyResult(res, () => pollSessionHttp(sessionId, {
+      cursor: query.searchParams.get('cursor'),
+      wait: query.searchParams.get('wait'),
+    }));
+    return true;
+  }
+  if (req.method === 'POST' && action === 'kill') {
+    replyResult(res, () => killSessionHttp(sessionId));
+    return true;
+  }
+  if (req.method === 'POST' && action === 'delete') {
+    replyResult(res, () => deleteSessionHttp(sessionId));
+    return true;
+  }
+  if (req.method === 'POST' && action === 'rename') {
+    withJsonBody(req, res, body => renameSessionHttp(sessionId, body));
+    return true;
+  }
+
+  jsonReply(res, 405, { error: 'Method not allowed' });
+  return true;
+}
+
+function shellHttpRoute(req, res, urlPath, query) {
+  if (req.method === 'POST' && urlPath === '/api/shell/start') {
+    withJsonBody(req, res, body => startShellHttp(body));
+    return true;
+  }
+  if (req.method === 'POST' && urlPath === '/api/shell/input') {
+    withJsonBody(req, res, body => inputShellHttp(body));
+    return true;
+  }
+  if (req.method === 'POST' && urlPath === '/api/shell/resize') {
+    withJsonBody(req, res, body => resizeShellHttp(body));
+    return true;
+  }
+  if (req.method === 'POST' && urlPath === '/api/shell/kill') {
+    replyResult(res, killShellHttp);
+    return true;
+  }
+  if (req.method === 'GET' && urlPath === '/api/shell/poll') {
+    replyResult(res, () => pollShellHttp({
+      cursor: query.searchParams.get('cursor'),
+      wait: query.searchParams.get('wait'),
+    }));
+    return true;
+  }
+  return false;
+}
+
 function handleProxyDirect(req, res) {
   const url = req.url.split('?')[0];
+  const parsedUrl = new URL(req.url, 'http://localhost');
+
+  if (terminalHttpRoute(req, res, url, parsedUrl)) return true;
+  if (shellHttpRoute(req, res, url, parsedUrl)) return true;
 
   if (url === '/api/active-sessions') {
     res.writeHead(200, { 'content-type': 'application/json' });

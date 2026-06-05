@@ -9,6 +9,9 @@ const { normalizeAgent, findAgentBin, getAgentConfig, buildAgentEnv } = require(
 const IS_WIN = process.platform === 'win32';
 const MAX_SESSIONS = 20;
 const SCROLLBACK_LIMIT = 500 * 1024; // 500KB
+const HTTP_POLL_DEFAULT_WAIT = 20000;
+const HTTP_POLL_MAX_WAIT = 25000;
+const MAX_HTTP_INPUT_BYTES = 64 * 1024;
 
 const RCC_DIR    = path.join(os.homedir(), '.rcc');
 const LOG_DIR    = path.join(RCC_DIR, 'logs');
@@ -48,6 +51,7 @@ function expandHome(input) {
  *   ptyProcess | null,
  *   clients: Set<Client>,   // 所有订阅者（WS 或 Unix socket）
  *   buffer,                 // in-memory scrollback
+ *   bufferBase,             // absolute cursor offset for trimmed buffer
  *   logPath, logStream,
  *   socketPath, socketServer,
  *   exitCode | null,
@@ -61,6 +65,12 @@ const wsToSession = new Map(); // wsId → { sessionId, client }
 const allWS = new Map();       // wsId → ws  (所有已连接的 WS，无论是否 attach 了 session)
 const wsToShellClient = new Map(); // wsId → shared shell client
 let shellSession = null;       // Single foreground shell PTY shared by all Web shell clients
+
+function apiError(status, message) {
+  const err = new Error(message);
+  err.status = status;
+  return err;
+}
 
 // ── Client wrappers ───────────────────────────────────────────────────────────
 
@@ -108,6 +118,87 @@ function broadcastSessionList() {
 
 function registerWS(wsId, ws)   { allWS.set(wsId, ws); }
 function unregisterWS(wsId)     { allWS.delete(wsId); }
+
+function bufferCursor(holder) {
+  return (holder.bufferBase || 0) + (holder.buffer ? holder.buffer.length : 0);
+}
+
+function trimBuffer(holder) {
+  if (!holder || !holder.buffer || holder.buffer.length <= SCROLLBACK_LIMIT) return;
+  const drop = holder.buffer.length - SCROLLBACK_LIMIT;
+  holder.buffer = holder.buffer.slice(drop);
+  holder.bufferBase = (holder.bufferBase || 0) + drop;
+}
+
+function readBufferSince(holder, cursor) {
+  const base = holder.bufferBase || 0;
+  const end = bufferCursor(holder);
+  let requested = Number(cursor);
+  if (!Number.isFinite(requested) || requested < 0) requested = base;
+  let reset = false;
+  if (requested < base) {
+    requested = base;
+    reset = true;
+  }
+  if (requested > end) requested = end;
+  const output = (holder.buffer || '').slice(requested - base);
+  return { output, cursor: end, reset };
+}
+
+function normalizePollWait(wait) {
+  const value = Number(wait);
+  if (!Number.isFinite(value) || value < 0) return HTTP_POLL_DEFAULT_WAIT;
+  return Math.min(HTTP_POLL_MAX_WAIT, Math.floor(value));
+}
+
+function waitersFor(holder) {
+  if (!holder.httpWaiters) holder.httpWaiters = new Set();
+  return holder.httpWaiters;
+}
+
+function notifyHttpWaiters(holder) {
+  if (!holder?.httpWaiters) return;
+  const waiters = [...holder.httpWaiters];
+  holder.httpWaiters.clear();
+  for (const wake of waiters) {
+    try { wake(); } catch (_) {}
+  }
+}
+
+function pollBuffer(holder, cursor, wait, meta) {
+  const initial = readBufferSince(holder, cursor);
+  if (initial.output || !meta().alive) return Promise.resolve({ ...meta(), ...initial });
+
+  const waitMs = normalizePollWait(wait);
+  if (waitMs <= 0) return Promise.resolve({ ...meta(), ...initial });
+
+  return new Promise(resolve => {
+    let settled = false;
+    const waiters = waitersFor(holder);
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      waiters.delete(finish);
+      const next = readBufferSince(holder, cursor);
+      resolve({ ...meta(), ...next });
+    };
+    const timer = setTimeout(finish, waitMs);
+    waiters.add(finish);
+  });
+}
+
+function normalizeSize(cols, rows) {
+  const c = Math.max(2, Math.min(500, parseInt(cols, 10) || 80));
+  const r = Math.max(1, Math.min(300, parseInt(rows, 10) || 24));
+  return { cols: c, rows: r };
+}
+
+function normalizeInput(data) {
+  if (typeof data !== 'string') throw apiError(400, 'data must be a string');
+  if (Buffer.byteLength(data, 'utf8') > MAX_HTTP_INPUT_BYTES) throw apiError(413, 'input too large');
+  return data;
+}
 
 // ── Meta persistence ──────────────────────────────────────────────────────────
 
@@ -292,7 +383,7 @@ function createSession(ws, wsId, { workingDir, resumeSessionId, name, agent, col
     name: sessionName, workingDir: cwd, agent: agentId,
     resumeSessionId: resumeSessionId || '',
     ptyProcess, clients: new Set([client]),
-    buffer: '', logPath, logStream,
+    buffer: '', bufferBase: 0, httpWaiters: new Set(), logPath, logStream,
     socketPath: null, socketServer: null,
     exitCode: null,
     createdAt: Date.now(), lastActiveAt: Date.now(),
@@ -309,12 +400,12 @@ function createSession(ws, wsId, { workingDir, resumeSessionId, name, agent, col
 
   ptyProcess.onData(data => {
     session.buffer += data;
-    if (session.buffer.length > SCROLLBACK_LIMIT)
-      session.buffer = session.buffer.slice(session.buffer.length - SCROLLBACK_LIMIT);
+    trimBuffer(session);
     // 通过 session.logStream 访问，避免闭包捕获旧 stream（rotate 后会更新）
     try { if (session.logStream && !session.logStream.destroyed) session.logStream.write(data); } catch (_) {}
     rotateLogIfNeeded(sessionId);
     session.lastActiveAt = Date.now();
+    notifyHttpWaiters(session);
     broadcastData(session, data);
   });
 
@@ -332,6 +423,7 @@ function createSession(ws, wsId, { workingDir, resumeSessionId, name, agent, col
     }
     try { if (session.socketServer) session.socketServer.close(); } catch (_) {}
     broadcastJSON(session, { type: 'exit', exitCode });
+    notifyHttpWaiters(session);
     // 退出后 5s 自动删除（给客户端时间显示退出消息）
     setTimeout(() => {
       sessions.delete(sessionId);
@@ -437,7 +529,7 @@ function selectShellBin() {
 
 function trimShellBuffer() {
   if (!shellSession?.buffer || shellSession.buffer.length <= SCROLLBACK_LIMIT) return;
-  shellSession.buffer = shellSession.buffer.slice(shellSession.buffer.length - SCROLLBACK_LIMIT);
+  trimBuffer(shellSession);
 }
 
 function detachShellClient(wsId) {
@@ -456,6 +548,7 @@ function destroyShell() {
   for (const client of shell.clients) {
     client.sendJSON({ type: 'shell_exit', exitCode: null });
   }
+  notifyHttpWaiters(shell);
 }
 
 function spawnSharedShell(ws, { cwd, cols = 80, rows = 24, env: clientEnv = {} }) {
@@ -487,6 +580,8 @@ function spawnSharedShell(ws, { cwd, cols = 80, rows = 24, env: clientEnv = {} }
     ptyProcess,
     clients: new Set(),
     buffer: '',
+    bufferBase: 0,
+    httpWaiters: new Set(),
     cols,
     rows,
     cwd: shellCwd,
@@ -501,6 +596,7 @@ function spawnSharedShell(ws, { cwd, cols = 80, rows = 24, env: clientEnv = {} }
     shell.buffer += data;
     trimShellBuffer();
     shell.lastActiveAt = Date.now();
+    notifyHttpWaiters(shell);
     for (const client of shell.clients) client.send(data);
   });
   ptyProcess.onExit(({ exitCode }) => {
@@ -509,6 +605,7 @@ function spawnSharedShell(ws, { cwd, cols = 80, rows = 24, env: clientEnv = {} }
     shell.ptyProcess = null;
     shell.lastActiveAt = Date.now();
     for (const client of shell.clients) client.sendJSON({ type: 'shell_exit', exitCode });
+    notifyHttpWaiters(shell);
   });
 
   return shell;
@@ -683,6 +780,224 @@ function closeWS(wsId) {
   wsToSession.delete(wsId);
 }
 
+// ── HTTP fallback transport ──────────────────────────────────────────────────
+
+function makeMemoryWS() {
+  const sent = [];
+  return {
+    ws: {
+      readyState: 1,
+      send(data) { sent.push(String(data)); },
+      close() {},
+    },
+    sent,
+  };
+}
+
+function findControlMessage(sent, type) {
+  for (const item of sent) {
+    try {
+      const msg = JSON.parse(item);
+      if (msg?.type === type) return msg;
+    } catch (_) {}
+  }
+  return null;
+}
+
+function sessionMeta(sessionId, session) {
+  return {
+    sessionId,
+    name: session.name,
+    workingDir: session.workingDir,
+    agent: session.agent || 'claude',
+    alive: session.exitCode === null && !!session.ptyProcess,
+    exitCode: session.exitCode,
+    clientCount: session.clients.size,
+  };
+}
+
+function sessionSnapshot(sessionId, session, cursor) {
+  return {
+    ...sessionMeta(sessionId, session),
+    ...readBufferSince(session, cursor),
+  };
+}
+
+function requireSession(sessionId) {
+  const session = sessions.get(sessionId);
+  if (!session) throw apiError(404, 'Session not found');
+  return session;
+}
+
+function startSessionHttp(params = {}) {
+  const wsId = `http-${uuidv4()}`;
+  const memory = makeMemoryWS();
+  createSession(memory.ws, wsId, params);
+  const error = findControlMessage(memory.sent, 'error');
+  const created = findControlMessage(memory.sent, 'session_id');
+  closeWS(wsId);
+
+  if (error) throw apiError(400, error.message || 'Failed to start session');
+  if (!created?.sessionId) throw apiError(500, 'Session start failed');
+
+  const session = requireSession(created.sessionId);
+  return sessionSnapshot(created.sessionId, session, session.bufferBase || 0);
+}
+
+function attachSessionHttp(sessionId, params = {}) {
+  const session = requireSession(sessionId);
+  const { cols, rows } = normalizeSize(params.cols, params.rows);
+  session.httpCols = cols;
+  session.httpRows = rows;
+  if (session.ptyProcess) {
+    try { session.ptyProcess.resize(cols, rows); } catch (_) {}
+  }
+  return sessionSnapshot(sessionId, session, session.bufferBase || 0);
+}
+
+function inputSessionHttp(sessionId, params = {}) {
+  const session = requireSession(sessionId);
+  if (!session.ptyProcess) throw apiError(409, 'Session is not running');
+  const data = normalizeInput(params.data);
+  const { cols, rows } = normalizeSize(params.cols || session.httpCols, params.rows || session.httpRows);
+  session.httpCols = cols;
+  session.httpRows = rows;
+  try { session.ptyProcess.resize(cols, rows); } catch (_) {}
+  session.ptyProcess.write(data);
+  session.lastActiveAt = Date.now();
+  return { ok: true, cursor: bufferCursor(session) };
+}
+
+function resizeSessionHttp(sessionId, params = {}) {
+  const session = requireSession(sessionId);
+  const { cols, rows } = normalizeSize(params.cols, params.rows);
+  session.httpCols = cols;
+  session.httpRows = rows;
+  if (session.ptyProcess) {
+    try { session.ptyProcess.resize(cols, rows); } catch (_) {}
+  }
+  return { ok: true, cols, rows };
+}
+
+function pollSessionHttp(sessionId, params = {}) {
+  const session = requireSession(sessionId);
+  return pollBuffer(session, params.cursor, params.wait, () => sessionMeta(sessionId, session));
+}
+
+function killSessionHttp(sessionId) {
+  const session = sessions.get(sessionId);
+  if (!session) return { ok: true, found: false, alive: false };
+  if (session.ptyProcess) {
+    try { session.ptyProcess.kill(); } catch (_) {}
+  }
+  session.lastActiveAt = Date.now();
+  return { ok: true, found: true, alive: session.exitCode === null && !!session.ptyProcess };
+}
+
+function deleteSessionHttp(sessionId) {
+  const session = sessions.get(sessionId);
+  if (!session) return { ok: true, found: false };
+
+  const ptyProcess = session.ptyProcess;
+  session.ptyProcess = null;
+  session.lastActiveAt = Date.now();
+  try { if (ptyProcess) ptyProcess.kill(); } catch (_) {}
+  try { if (session.logStream) session.logStream.end(); } catch (_) {}
+  try { if (session.socketServer) session.socketServer.close(); } catch (_) {}
+  for (const client of session.clients) {
+    if (client.type === 'unix') {
+      try { client._socket.destroy(); } catch (_) {}
+    }
+  }
+  notifyHttpWaiters(session);
+  sessions.delete(sessionId);
+  saveMeta();
+  broadcastSessionList();
+  return { ok: true, found: true };
+}
+
+function renameSessionHttp(sessionId, params = {}) {
+  const session = sessions.get(sessionId);
+  if (!session) return { ok: true, found: false };
+  const name = typeof params.name === 'string' ? params.name.trim() : '';
+  if (!name) throw apiError(400, 'name is required');
+  if (session.name !== name) {
+    session.name = name;
+    saveMeta();
+    broadcastSessionList();
+  }
+  return { ok: true, found: true, name: session.name };
+}
+
+function shellMeta() {
+  return {
+    alive: !!shellSession?.ptyProcess,
+    exitCode: shellSession?.exitCode ?? null,
+    cwd: shellSession?.cwd || '',
+    clientCount: shellSession?.clients?.size || 0,
+  };
+}
+
+function requireShell() {
+  if (!shellSession) throw apiError(404, 'Shell not found');
+  return shellSession;
+}
+
+function startShellHttp(params = {}) {
+  const { cols, rows } = normalizeSize(params.cols, params.rows);
+  let shell = shellSession;
+  if (!shell || !shell.ptyProcess) {
+    const memory = makeMemoryWS();
+    shell = spawnSharedShell(memory.ws, { cwd: params.cwd, cols, rows, env: params.env || {} });
+    const error = findControlMessage(memory.sent, 'shell_error');
+    if (error) throw apiError(400, error.message || 'Failed to start shell');
+    if (!shell) throw apiError(500, 'Shell start failed');
+  }
+  shell.cols = cols;
+  shell.rows = rows;
+  if (shell.ptyProcess) {
+    try { shell.ptyProcess.resize(cols, rows); } catch (_) {}
+  }
+  return {
+    ...shellMeta(),
+    ...readBufferSince(shell, shell.bufferBase || 0),
+  };
+}
+
+function inputShellHttp(params = {}) {
+  const shell = requireShell();
+  if (!shell.ptyProcess) throw apiError(409, 'Shell is not running');
+  const data = normalizeInput(params.data);
+  const { cols, rows } = normalizeSize(params.cols || shell.cols, params.rows || shell.rows);
+  shell.cols = cols;
+  shell.rows = rows;
+  try { shell.ptyProcess.resize(cols, rows); } catch (_) {}
+  shell.ptyProcess.write(data);
+  shell.lastActiveAt = Date.now();
+  return { ok: true, cursor: bufferCursor(shell) };
+}
+
+function resizeShellHttp(params = {}) {
+  const shell = requireShell();
+  const { cols, rows } = normalizeSize(params.cols, params.rows);
+  shell.cols = cols;
+  shell.rows = rows;
+  if (shell.ptyProcess) {
+    try { shell.ptyProcess.resize(cols, rows); } catch (_) {}
+  }
+  return { ok: true, cols, rows };
+}
+
+function pollShellHttp(params = {}) {
+  const shell = requireShell();
+  return pollBuffer(shell, params.cursor, params.wait, shellMeta);
+}
+
+function killShellHttp() {
+  destroyShell();
+  return { ok: true };
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function getSessionList() {
@@ -757,4 +1072,24 @@ process.on('exit', cleanup);
 process.on('SIGTERM', () => { cleanup(); process.exit(0); });
 process.on('SIGINT',  () => { cleanup(); process.exit(0); });
 
-module.exports = { handleMessage, closeWS, listSessions, readLog, registerWS, unregisterWS };
+module.exports = {
+  handleMessage,
+  closeWS,
+  listSessions,
+  readLog,
+  registerWS,
+  unregisterWS,
+  startSessionHttp,
+  attachSessionHttp,
+  inputSessionHttp,
+  resizeSessionHttp,
+  pollSessionHttp,
+  killSessionHttp,
+  deleteSessionHttp,
+  renameSessionHttp,
+  startShellHttp,
+  inputShellHttp,
+  resizeShellHttp,
+  pollShellHttp,
+  killShellHttp,
+};
