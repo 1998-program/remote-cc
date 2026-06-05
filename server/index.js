@@ -124,8 +124,8 @@ app.get('/api/session-log/:sessionId', (req, res) => {
 function routeResult(res, fn) {
   Promise.resolve()
     .then(fn)
-    .then(result => res.json(result))
-    .catch(err => res.status(err.status || 500).json({ error: err.message || 'Internal server error' }));
+    .then(result => res.set('Cache-Control', 'no-store').json(result))
+    .catch(err => res.set('Cache-Control', 'no-store').status(err.status || 500).json({ error: err.message || 'Internal server error' }));
 }
 
 // ── HTTP terminal fallback（直接运行 index.js 时也支持）────────────────────────

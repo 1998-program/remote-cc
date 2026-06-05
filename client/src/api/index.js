@@ -46,13 +46,28 @@ export function logout() { clearToken(); }
 export function isLoggedIn() { return !!getToken(); }
 
 async function apiFetch(path, opts = {}) {
-  const res = await fetch(BASE + path, {
-    ...opts,
-    headers: { ...authHeader(), ...(opts.headers || {}) },
-  });
-  if (res.status === 401) { handleUnauthorized(); throw new Error('Unauthorized'); }
-  if (!res.ok) await throwApiError(res);
-  return res.json();
+  const { timeoutMs = 0, ...fetchOpts } = opts;
+  let timer = null;
+  let controller = null;
+  if (timeoutMs > 0 && typeof AbortController !== 'undefined' && !fetchOpts.signal) {
+    controller = new AbortController();
+    fetchOpts.signal = controller.signal;
+    timer = setTimeout(() => controller.abort(), timeoutMs);
+  }
+  try {
+    const res = await fetch(BASE + path, {
+      ...fetchOpts,
+      headers: { ...authHeader(), ...(fetchOpts.headers || {}) },
+    });
+    if (res.status === 401) { handleUnauthorized(); throw new Error('Unauthorized'); }
+    if (!res.ok) await throwApiError(res);
+    return res.json();
+  } catch (err) {
+    if (err?.name === 'AbortError') throw new Error('Request timeout');
+    throw err;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
 
 async function apiFetchText(path) {
@@ -80,6 +95,12 @@ function getDownloadFilename(disposition) {
   }
   const plain = disposition.match(/filename="([^"]+)"/i);
   return plain?.[1] || '';
+}
+
+function pollTimeout(wait) {
+  const waitMs = Number(wait);
+  const safeWait = Number.isFinite(waitMs) && waitMs >= 0 ? waitMs : 5000;
+  return Math.max(10000, safeWait + 5000);
 }
 
 async function uploadFile(path, file) {
@@ -142,7 +163,10 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name }),
     }),
-    poll:   (sessionId, cursor = 0, wait = 20000) => apiFetch(`/api/terminal/${encodeURIComponent(sessionId)}/poll?cursor=${encodeURIComponent(cursor)}&wait=${encodeURIComponent(wait)}`),
+    poll:   (sessionId, cursor = 0, wait = 5000) => apiFetch(
+      `/api/terminal/${encodeURIComponent(sessionId)}/poll?cursor=${encodeURIComponent(cursor)}&wait=${encodeURIComponent(wait)}`,
+      { timeoutMs: pollTimeout(wait) },
+    ),
   },
   shell: {
     start:  (payload) => apiFetch('/api/shell/start', {
@@ -161,7 +185,10 @@ export const api = {
       body: JSON.stringify(payload || {}),
     }),
     kill:   () => apiFetch('/api/shell/kill', { method: 'POST' }),
-    poll:   (cursor = 0, wait = 20000) => apiFetch(`/api/shell/poll?cursor=${encodeURIComponent(cursor)}&wait=${encodeURIComponent(wait)}`),
+    poll:   (cursor = 0, wait = 5000) => apiFetch(
+      `/api/shell/poll?cursor=${encodeURIComponent(cursor)}&wait=${encodeURIComponent(wait)}`,
+      { timeoutMs: pollTimeout(wait) },
+    ),
   },
   fs: {
     list:  (path, hidden = false) => apiFetch(`/api/fs/list?path=${encodeURIComponent(path)}&hidden=${hidden}`),

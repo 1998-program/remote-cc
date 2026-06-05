@@ -12,7 +12,7 @@
       ref="mobileInputRef"
       class="mobile-input-trap"
       autocomplete="off"
-      autocapitalize="off"
+      autocapitalize="none"
       autocorrect="off"
       spellcheck="false"
       inputmode="text"
@@ -156,14 +156,29 @@ function focusTerm(e) {
   if (isMobileViewport() && term?.getSelection?.()) return;
   if (isMobileViewport() && focusMobileInput()) return;
   const ta = termRef.value?.querySelector('.xterm-helper-textarea');
+  configureInputMode(ta);
   if (ta) ta.focus();
 }
 
 function focusMobileInput() {
   const input = mobileInputRef.value;
   if (!input) return false;
+  configureInputMode(input);
   try { input.focus({ preventScroll: true }); } catch (_) { input.focus(); }
   return document.activeElement === input;
+}
+
+function configureInputMode(input) {
+  if (!input) return;
+  input.setAttribute('autocomplete', 'off');
+  input.setAttribute('autocorrect', 'off');
+  input.setAttribute('autocapitalize', 'none');
+  input.setAttribute('spellcheck', 'false');
+  input.setAttribute('inputmode', 'text');
+  input.setAttribute('enterkeyhint', 'enter');
+  input.autocapitalize = 'none';
+  input.autocorrect = 'off';
+  input.spellcheck = false;
 }
 
 function shortPath(p) {
@@ -366,6 +381,7 @@ onMounted(() => {
   term.loadAddon(fitAddon);
   term.loadAddon(new WebLinksAddon());
   term.open(termRef.value);
+  configureInputMode(termRef.value?.querySelector('.xterm-helper-textarea'));
   selectionDisposable = term.onSelectionChange(() => {
     terminalSelection.value = term.getSelection();
   });
@@ -379,6 +395,7 @@ onMounted(() => {
   // xterm 渲染后 viewport 元素才存在，用 MutationObserver 等它出现
   const vpObserver = new MutationObserver(() => {
     const vp = term.element?.querySelector('.xterm-viewport');
+    configureInputMode(termRef.value?.querySelector('.xterm-helper-textarea'));
     if (vp) {
       bindViewport(vp);
       vpObserver.disconnect();

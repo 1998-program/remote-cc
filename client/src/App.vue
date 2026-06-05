@@ -246,7 +246,7 @@ let controlWS = null;
 let reconnTimer = null;
 const wsReady = ref(false);
 const WS_FALLBACK_DELAY = 3000;
-const HTTP_POLL_WAIT = 20000;
+const HTTP_POLL_WAIT = 5000;
 const CONTROL_HTTP_POLL_WAIT = 3000;
 const CONTROL_WS_FALLBACK_DELAY = 2000;
 let controlHttpTimer = null;
@@ -569,6 +569,7 @@ async function startEntryHttp(entry) {
 
   let destroyed = false;
   let retryDelay = 1000;
+  let openRetryDelay = 1000;
   entry.transport = 'http';
   entry.ws = null;
 
@@ -596,29 +597,34 @@ async function startEntryHttp(entry) {
 
   entry._destroy = () => { destroyed = true; };
 
-  try {
-    await nextTick();
-    const el = termRefs[entry.sid];
-    if (el) el.fit();
-    const cols = el?.getCols?.() ?? 80;
-    const rows = el?.getRows?.() ?? 24;
-    const snapshot = entry.attachSessionId
-      ? await api.terminal.attach(entry.attachSessionId, { cols, rows })
-      : await api.terminal.start({
-          workingDir: entry.workingDir,
-          agent: entry.agent || 'claude',
-          resumeSessionId: entry.resumeSessionId || '',
-          name: entry.name,
-          cols,
-          rows,
-        });
-    if (destroyed) return;
-    applyHttpSessionSnapshot(entry, snapshot, !!entry.attachSessionId);
-    poll(snapshot.cursor ?? 0);
-  } catch (e) {
-    if (destroyed) return;
-    const el = termRefs[entry.sid];
-    if (el) el.write(`\r\n\x1b[31m[${t.value.error_prefix}${e.message}]\x1b[0m\r\n`);
+  while (!destroyed) {
+    try {
+      await nextTick();
+      const el = termRefs[entry.sid];
+      if (el) el.fit();
+      const cols = el?.getCols?.() ?? 80;
+      const rows = el?.getRows?.() ?? 24;
+      const snapshot = entry.attachSessionId
+        ? await api.terminal.attach(entry.attachSessionId, { cols, rows })
+        : await api.terminal.start({
+            workingDir: entry.workingDir,
+            agent: entry.agent || 'claude',
+            resumeSessionId: entry.resumeSessionId || '',
+            name: entry.name,
+            cols,
+            rows,
+          });
+      if (destroyed) return;
+      applyHttpSessionSnapshot(entry, snapshot, !!entry.attachSessionId);
+      poll(snapshot.cursor ?? 0);
+      return;
+    } catch (_) {
+      if (destroyed) return;
+      const el = termRefs[entry.sid];
+      if (el) el.write(`\r\n\x1b[33m[${t.value.disconnected} ${(openRetryDelay/1000).toFixed(1)}${t.value.reconnecting}]\x1b[0m\r\n`);
+      await new Promise(resolve => setTimeout(resolve, openRetryDelay));
+      openRetryDelay = Math.min(openRetryDelay * 1.5, 15000);
+    }
   }
 }
 

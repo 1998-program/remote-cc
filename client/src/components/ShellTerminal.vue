@@ -31,7 +31,7 @@ let readyTimer = null;
 let fallbackTimer = null;
 let httpRun = 0;
 const WS_FALLBACK_DELAY = 3000;
-const HTTP_POLL_WAIT = 20000;
+const HTTP_POLL_WAIT = 5000;
 
 function clearTimers() {
   clearTimeout(readyTimer);
@@ -144,7 +144,7 @@ function cleanup(kill = true) {
 function sendInput(data) {
   if (ws?.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify({ type: 'shell_input', data }));
-  } else if (status.value === 'connected') {
+  } else if (status.value === 'connected' || status.value === 'connecting') {
     api.shell.input({
       data,
       cols: terminalRef.value?.getCols?.() ?? 80,
@@ -161,7 +161,7 @@ function onInput(data) {
 function onResize({ cols, rows }) {
   if (ws?.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify({ type: 'shell_resize', cols, rows }));
-  } else if (status.value === 'connected') {
+  } else if (status.value === 'connected' || status.value === 'connecting') {
     api.shell.resize({ cols, rows }).catch(() => {});
   }
 }
@@ -222,7 +222,7 @@ async function pollHttp(run, cursor) {
       if (result.alive === false) return;
     } catch (_) {
       if (run !== httpRun || closing) return;
-      status.value = 'closed';
+      status.value = 'connecting';
       terminalRef.value?.write(`\r\n\x1b[33m[shell disconnected; retrying ${(retryDelay/1000).toFixed(1)}s]\x1b[0m\r\n`);
       await new Promise(resolve => setTimeout(resolve, retryDelay));
       retryDelay = Math.min(retryDelay * 1.5, 15000);

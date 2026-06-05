@@ -9,8 +9,8 @@ const { normalizeAgent, findAgentBin, getAgentConfig, buildAgentEnv } = require(
 const IS_WIN = process.platform === 'win32';
 const MAX_SESSIONS = 20;
 const SCROLLBACK_LIMIT = 500 * 1024; // 500KB
-const HTTP_POLL_DEFAULT_WAIT = 20000;
-const HTTP_POLL_MAX_WAIT = 25000;
+const HTTP_POLL_DEFAULT_WAIT = 5000;
+const HTTP_POLL_MAX_WAIT = 8000;
 const MAX_HTTP_INPUT_BYTES = 64 * 1024;
 
 const RCC_DIR    = path.join(os.homedir(), '.rcc');
