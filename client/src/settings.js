@@ -15,7 +15,7 @@ export const DEFAULTS = {
   // ── 终端 ──────────────────────────────────────
   fontSize:      13,          // px
   fontFamily:    'meslolgm',  // 见 FONT_FAMILIES
-  lineHeight:    1.3,
+  lineHeight:    1.0,
   cursorStyle:   'block',     // 'block' | 'underline' | 'bar'
   cursorBlink:   true,
   scrollback:    5000,

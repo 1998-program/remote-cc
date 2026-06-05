@@ -12,7 +12,7 @@ const DEFAULTS = {
 
   fontSize: 13,
   fontFamily: 'meslolgm',
-  lineHeight: 1.3,
+  lineHeight: 1.0,
   cursorStyle: 'block',
   cursorBlink: true,
   scrollback: 5000,
