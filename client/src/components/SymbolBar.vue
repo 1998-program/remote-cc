@@ -153,6 +153,7 @@ function onTouchEnd(sym) {
 .symbol-bar {
   --symbol-button-height: 30px;
   flex-shrink: 0;
+  background: var(--panel);
   background: color-mix(in srgb, var(--panel) 90%, transparent);
   border-top: 1px solid var(--hairline);
   padding: 6px;
@@ -163,6 +164,7 @@ function onTouchEnd(sym) {
 }
 /* Shell 模式：顶部边框用 neon2 */
 .symbol-bar.shell-mode {
+  border-top-color: var(--border-strong);
   border-top-color: color-mix(in srgb, var(--neon2) 50%, transparent);
 }
 
@@ -193,8 +195,10 @@ function onTouchEnd(sym) {
   flex: 1;
   height: var(--symbol-button-height);
   min-height: var(--symbol-button-height);
+  background: var(--panel2);
   background: color-mix(in srgb, var(--neon) 6%, var(--panel2));
-  border: 1px solid color-mix(in srgb, var(--neon) 20%, transparent);
+  border: 1px solid var(--border);
+  border-color: color-mix(in srgb, var(--neon) 20%, transparent);
   border-radius: var(--radius-sm);
   color: var(--neon);
   font-family: 'JetBrains Mono', monospace;
@@ -213,6 +217,7 @@ function onTouchEnd(sym) {
   white-space: nowrap;
 }
 .sym-btn:active {
+  background: var(--panel3);
   background: color-mix(in srgb, var(--neon) 22%, transparent);
   box-shadow: 0 0 6px var(--glow);
   transform: translateY(1px);
@@ -225,17 +230,22 @@ function onTouchEnd(sym) {
   font-size: 10px;
   font-weight: 800;
   color: var(--neon);
+  background: var(--panel3);
   background: color-mix(in srgb, var(--neon) 14%, transparent);
+  border-color: var(--border-strong);
   border-color: color-mix(in srgb, var(--neon) 40%, transparent);
 }
 
 /* ⏎ 回车：最右侧，neon2 色区分 */
 .cc-mode .sym-btn:last-child {
   color: var(--neon2);
+  border-color: var(--border-strong);
   border-color: color-mix(in srgb, var(--neon2) 25%, transparent);
+  background: var(--panel2);
   background: color-mix(in srgb, var(--neon2) 6%, var(--panel2));
 }
 .cc-mode .sym-btn:last-child:active {
+  background: var(--panel3);
   background: color-mix(in srgb, var(--neon2) 20%, transparent);
   box-shadow: 0 0 6px color-mix(in srgb, var(--neon2) 40%, transparent);
 }
@@ -243,17 +253,22 @@ function onTouchEnd(sym) {
 /* Shell 模式：按钮用 neon2 色系 */
 .shell-mode .sym-btn {
   color: var(--neon2);
+  border-color: var(--border);
   border-color: color-mix(in srgb, var(--neon2) 22%, transparent);
+  background: var(--panel2);
   background: color-mix(in srgb, var(--neon2) 6%, var(--panel2));
   font-weight: 650;
 }
 .shell-mode .sym-btn:active {
+  background: var(--panel3);
   background: color-mix(in srgb, var(--neon2) 20%, transparent);
   box-shadow: 0 0 6px color-mix(in srgb, var(--neon2) 40%, transparent);
 }
 .shell-mode .sym-btn--modifier {
   color: var(--neon);
+  border-color: var(--border-strong);
   border-color: color-mix(in srgb, var(--neon) 28%, transparent);
+  background: var(--panel3);
   background:
     linear-gradient(180deg,
       color-mix(in srgb, var(--neon) 12%, transparent),
@@ -264,6 +279,7 @@ function onTouchEnd(sym) {
 }
 .shell-mode .sym-btn--modifier:active,
 .shell-mode .sym-btn--modifier.is-active {
+  background: var(--panel3);
   background: color-mix(in srgb, var(--neon) 22%, transparent);
   box-shadow: 0 0 6px color-mix(in srgb, var(--neon) 40%, transparent);
 }

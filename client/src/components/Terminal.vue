@@ -829,13 +829,16 @@ function ctxClear()     { ctxMenu.show = false; term?.clear(); }
 }
 .term-container {
   flex: 1; min-height: 0; overflow: hidden; padding: 5px;
+  background: var(--bg);
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--panel) 14%, transparent), transparent 120px),
     var(--bg);
 }
 .term-container.drag-over {
+  outline: 2px dashed var(--border-strong);
   outline: 2px dashed color-mix(in srgb, var(--neon) 75%, transparent);
   outline-offset: -4px;
+  background: var(--bg2);
   background: color-mix(in srgb, var(--neon) 5%, var(--bg));
 }
 
@@ -867,10 +870,12 @@ function ctxClear()     { ctxMenu.show = false; term?.clear(); }
   z-index: 8;
   display: flex;
   flex-direction: column;
+  background: var(--bg);
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--panel) 94%, transparent), color-mix(in srgb, var(--bg) 96%, transparent)),
     var(--bg);
-  border: 1px solid color-mix(in srgb, var(--neon) 22%, transparent);
+  border: 1px solid var(--border);
+  border-color: color-mix(in srgb, var(--neon) 22%, transparent);
 }
 
 .mobile-copy-toolbar {
@@ -880,6 +885,7 @@ function ctxClear()     { ctxMenu.show = false; term?.clear(); }
   gap: 8px;
   padding: 8px;
   border-bottom: 1px solid var(--hairline);
+  background: var(--panel);
   background: color-mix(in srgb, var(--panel) 92%, transparent);
 }
 
@@ -890,8 +896,10 @@ function ctxClear()     { ctxMenu.show = false; term?.clear(); }
   justify-content: center;
   width: 36px;
   height: 36px;
-  border: 1px solid color-mix(in srgb, var(--neon) 24%, transparent);
+  border: 1px solid var(--border);
+  border-color: color-mix(in srgb, var(--neon) 24%, transparent);
   border-radius: var(--radius-sm);
+  background: var(--panel2);
   background: color-mix(in srgb, var(--panel2) 88%, transparent);
   color: var(--text);
   cursor: pointer;
@@ -901,6 +909,7 @@ function ctxClear()     { ctxMenu.show = false; term?.clear(); }
 
 .mobile-copy-action:active,
 .mobile-selection-copy:active {
+  background: var(--panel3);
   background: color-mix(in srgb, var(--neon) 14%, var(--panel2));
   color: var(--neon);
 }
@@ -940,8 +949,10 @@ function ctxClear()     { ctxMenu.show = false; term?.clear(); }
   height: var(--symbol-button-height, 30px);
   min-height: var(--symbol-button-height, 30px);
   min-width: 42px;
+  background: var(--panel2);
   background: color-mix(in srgb, var(--neon) 8%, var(--panel2));
-  border: 1px solid color-mix(in srgb, var(--neon) 24%, transparent);
+  border: 1px solid var(--border);
+  border-color: color-mix(in srgb, var(--neon) 24%, transparent);
   border-radius: var(--radius-sm);
   color: var(--neon);
   cursor: pointer;
@@ -952,7 +963,7 @@ function ctxClear()     { ctxMenu.show = false; term?.clear(); }
   line-height: 1; overflow: visible; --app-icon-size: 14px;
   flex: 0 0 42px;
 }
-.img-upload-btn:hover { background: color-mix(in srgb, var(--neon) 15%, transparent); border-color: var(--border-strong); transform: translateY(-1px); }
+.img-upload-btn:hover { background: var(--panel3); background: color-mix(in srgb, var(--neon) 15%, transparent); border-color: var(--border-strong); transform: translateY(-1px); }
 .img-upload-btn.uploading { opacity: .6; cursor: default; }
 .img-path-hint {
   position: absolute;
@@ -962,8 +973,10 @@ function ctxClear()     { ctxMenu.show = false; term?.clear(); }
   display: inline-flex; align-items: center; gap: 5px;
   font-family: 'JetBrains Mono', monospace; font-size: 10px;
   color: var(--neon);
+  background: var(--panel);
   background: color-mix(in srgb, var(--panel) 88%, transparent);
-  border: 1px solid color-mix(in srgb, var(--neon) 28%, transparent);
+  border: 1px solid var(--border);
+  border-color: color-mix(in srgb, var(--neon) 28%, transparent);
   border-radius: var(--radius-sm);
   padding: 5px 8px;
   box-shadow: 0 8px 22px color-mix(in srgb, #000000 28%, transparent);
@@ -1019,7 +1032,7 @@ function ctxClear()     { ctxMenu.show = false; term?.clear(); }
   font-family: 'JetBrains Mono', monospace; font-size: 12px;
   padding: 8px 10px; border-radius: var(--radius-sm); text-align: left; transition: background .1s;
 }
-.ctx-item:hover { background: color-mix(in srgb, var(--neon) 10%, transparent); }
+.ctx-item:hover { background: var(--panel2); background: color-mix(in srgb, var(--neon) 10%, transparent); }
 .ctx-icon {
   color: var(--neon); font-size: 13px; width: 16px; text-align: center; flex-shrink: 0;
   line-height: 1; overflow: visible; --app-icon-size: 13px;
