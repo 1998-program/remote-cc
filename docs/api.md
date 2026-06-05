@@ -162,6 +162,30 @@ GET /api/fs/download?path=/path/to/file
 
 响应：二进制文件流。
 
+#### HTTP 终端回退（需认证）
+
+当接入层不支持 WebSocket Upgrade 时，Web 端会自动使用这些 HTTP 长轮询接口：
+
+```
+POST /api/terminal/start
+POST /api/terminal/:sessionId/attach
+POST /api/terminal/:sessionId/input
+POST /api/terminal/:sessionId/resize
+POST /api/terminal/:sessionId/kill
+POST /api/terminal/:sessionId/delete
+POST /api/terminal/:sessionId/rename
+GET  /api/terminal/:sessionId/poll?cursor=0&wait=20000
+
+POST /api/shell/start
+POST /api/shell/input
+POST /api/shell/resize
+POST /api/shell/kill
+GET  /api/shell/poll?cursor=0&wait=20000
+```
+
+`poll` 返回 `{ output, cursor, reset, alive, exitCode }`；客户端用返回的 `cursor` 继续下一次长轮询。`wait` 最大 25000ms。
+`kill` 和 `delete` 可重复调用；目标已不存在时返回成功且不产生副作用。终端输入接口天然非幂等，客户端不会自动重试输入请求。
+
 ---
 
 ### WebSocket API
@@ -376,6 +400,30 @@ GET /api/fs/download?path=/path/to/file
 ```
 
 Response: binary file stream.
+
+#### HTTP Terminal Fallback (auth required)
+
+When the access layer does not support WebSocket Upgrade, the Web client automatically uses these HTTP long-polling endpoints:
+
+```
+POST /api/terminal/start
+POST /api/terminal/:sessionId/attach
+POST /api/terminal/:sessionId/input
+POST /api/terminal/:sessionId/resize
+POST /api/terminal/:sessionId/kill
+POST /api/terminal/:sessionId/delete
+POST /api/terminal/:sessionId/rename
+GET  /api/terminal/:sessionId/poll?cursor=0&wait=20000
+
+POST /api/shell/start
+POST /api/shell/input
+POST /api/shell/resize
+POST /api/shell/kill
+GET  /api/shell/poll?cursor=0&wait=20000
+```
+
+`poll` returns `{ output, cursor, reset, alive, exitCode }`; clients pass the returned `cursor` to the next long-poll request. `wait` is capped at 25000ms.
+`kill` and `delete` are safe to repeat; missing targets return success without side effects. Terminal input is naturally non-idempotent, so clients do not retry input requests automatically.
 
 ---
 

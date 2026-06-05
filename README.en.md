@@ -30,6 +30,7 @@ This is not screenshots or log forwarding. It is **true bidirectional real-time 
 
 - **Real terminal** — full color, interactive, and mouse support, just like using it locally
 - **Real-time multi-client sync** — phone, tablet, and desktop all share the same agent session
+- **HTTP fallback transport** — when a proxy or access gateway blocks WebSocket, Home, Agent terminals, and Shared Shell automatically fall back to HTTP
 - **Persistent sessions** — close the browser or drop SSH, the agent keeps running; reconnect anytime
 - **History resume** — reads Claude Code / Codex history and resumes conversations in the right working directory
 - **Directory-based task creation** — choose the working directory from the server directory tree
@@ -90,7 +91,7 @@ Click the terminal icon in the top bar to open the shared Shell. It is a normal 
        ┌──────────────────┼──────────────────┐
        ▼                  ▼                  ▼
   Phone browser     Desktop browser    Local terminal
-  (WebSocket)        (WebSocket)      (Unix Socket)
+ (WS/HTTP fallback) (WS/HTTP fallback) (Unix Socket)
        │                  │                  │
        └───────┬──────────┘                  │
                ▼                             │
@@ -153,6 +154,12 @@ Inside any session: **`Ctrl+]`** goes back to the menu without killing the agent
 
 ## Changelog
 
+### 2026-06-05
+
+- **HTTP fallback transport**: when WebSocket is unavailable, the Home session list refreshes by HTTP polling, and Agent terminals plus Shared Shell switch to HTTP long polling
+- **Reverse-proxy compatibility**: adds HTTP fallback for session control actions such as `kill`, `delete`, and `rename`, for access layers that do not pass WebSocket Upgrade
+- **Idempotency handling**: session start/attach, Shell start, resize, and kill/delete controls are repeat-safe; terminal input remains non-idempotent to avoid duplicated commands on retry
+
 ### 2026-06-04
 
 - **Shared shell**: Web Shell is now one foreground shared session with reconnect replay and multi-client sync
@@ -168,6 +175,9 @@ Inside any session: **`Ctrl+]`** goes back to the menu without killing the agent
 - **Appearance and language**: defaults to Studio + Aurora + Material, with 9 UI styles, dark/light color themes, 6 icon styles, and complete zh/en switching
 - **Settings persistence**: Web settings are saved to `~/.rcc/web-settings.json`, including default paths, themes, terminal preferences, and language
 - **TUI detach fix**: fixes first `Ctrl+]` detach after creating a session from `rcc-tui`
+
+<details>
+<summary>Older changelog</summary>
 
 ### 2026-05-21
 
@@ -189,6 +199,8 @@ Inside any session: **`Ctrl+]`** goes back to the menu without killing the agent
 - **remotecc update**: detects what changed and automatically restarts or hot-reloads as needed
 - **remotecc attach**: opens the session manager and goes directly into the named session; detaching returns to the menu instead of exiting
 - **Login redirect**: when the service restarts and the token expires, the browser automatically shows the login page instead of a blank screen
+
+</details>
 
 ---
 

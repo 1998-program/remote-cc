@@ -7,7 +7,12 @@ const os = require('os');
 const { v4: uuidv4 } = require('uuid');
 const { httpAuth, wsAuth, loginHandler, changePasswordHandler } = require('./auth');
 const { getProjects, getSessions, readSession } = require('./history');
-const { handleMessage, closeWS, listSessions, readLog, registerWS, unregisterWS } = require('./pty-manager');
+const {
+  handleMessage, closeWS, listSessions, readLog, registerWS, unregisterWS,
+  startSessionHttp, attachSessionHttp, inputSessionHttp, resizeSessionHttp, pollSessionHttp,
+  killSessionHttp, deleteSessionHttp, renameSessionHttp,
+  startShellHttp, inputShellHttp, resizeShellHttp, pollShellHttp, killShellHttp,
+} = require('./pty-manager');
 const { listDir, readFilePreview, statFile, createDirectory, writeUploadedFile, readDownloadFile } = require('./fs-handler');
 const { getSettingsHandler, saveSettingsHandler } = require('./web-settings');
 
@@ -114,6 +119,61 @@ app.get('/api/session-log/:sessionId', (req, res) => {
   const log = readLog(req.params.sessionId);
   if (log === null) return res.status(404).json({ error: 'Not found' });
   res.type('text/plain').send(log);
+});
+
+function routeResult(res, fn) {
+  Promise.resolve()
+    .then(fn)
+    .then(result => res.json(result))
+    .catch(err => res.status(err.status || 500).json({ error: err.message || 'Internal server error' }));
+}
+
+// ── HTTP terminal fallback（直接运行 index.js 时也支持）────────────────────────
+app.post('/api/terminal/start', (req, res) => {
+  routeResult(res, () => startSessionHttp(req.body || {}));
+});
+app.post('/api/terminal/:sessionId/attach', (req, res) => {
+  routeResult(res, () => attachSessionHttp(req.params.sessionId, req.body || {}));
+});
+app.post('/api/terminal/:sessionId/input', (req, res) => {
+  routeResult(res, () => inputSessionHttp(req.params.sessionId, req.body || {}));
+});
+app.post('/api/terminal/:sessionId/resize', (req, res) => {
+  routeResult(res, () => resizeSessionHttp(req.params.sessionId, req.body || {}));
+});
+app.post('/api/terminal/:sessionId/kill', (req, res) => {
+  routeResult(res, () => killSessionHttp(req.params.sessionId));
+});
+app.post('/api/terminal/:sessionId/delete', (req, res) => {
+  routeResult(res, () => deleteSessionHttp(req.params.sessionId));
+});
+app.post('/api/terminal/:sessionId/rename', (req, res) => {
+  routeResult(res, () => renameSessionHttp(req.params.sessionId, req.body || {}));
+});
+app.get('/api/terminal/:sessionId/poll', (req, res) => {
+  routeResult(res, () => pollSessionHttp(req.params.sessionId, {
+    cursor: req.query.cursor,
+    wait: req.query.wait,
+  }));
+});
+
+app.post('/api/shell/start', (req, res) => {
+  routeResult(res, () => startShellHttp(req.body || {}));
+});
+app.post('/api/shell/input', (req, res) => {
+  routeResult(res, () => inputShellHttp(req.body || {}));
+});
+app.post('/api/shell/resize', (req, res) => {
+  routeResult(res, () => resizeShellHttp(req.body || {}));
+});
+app.post('/api/shell/kill', (req, res) => {
+  routeResult(res, killShellHttp);
+});
+app.get('/api/shell/poll', (req, res) => {
+  routeResult(res, () => pollShellHttp({
+    cursor: req.query.cursor,
+    wait: req.query.wait,
+  }));
 });
 
 app.post('/api/change-password', changePasswordHandler);
