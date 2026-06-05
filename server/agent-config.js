@@ -9,6 +9,8 @@ const PROXY_ENV_KEYS = [
   'HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'NO_PROXY',
   'http_proxy', 'https_proxy', 'all_proxy', 'no_proxy',
 ];
+const BAIDU_CC_CLAUDE_BIN = '/root/.comate/baidu-cc/bin/ducc';
+const BAIDU_CX_CODEX_BIN = '/root/.baidu-cx/baidu-cx/bin/ducx';
 
 const AGENTS = {
   claude: {
@@ -26,6 +28,7 @@ const AGENTS = {
       process.env.CLAUDE_BIN,
       '/root/.nvm/versions/node/v24.14.0/bin/claude',
       'claude',
+      BAIDU_CC_CLAUDE_BIN,
     ],
     buildArgs({ resumeSessionId }) {
       const args = [];
@@ -47,6 +50,7 @@ const AGENTS = {
     ],
     unixCandidates: [
       process.env.CODEX_BIN,
+      BAIDU_CX_CODEX_BIN,
       'codex',
     ],
     buildArgs({ cwd, resumeSessionId }) {
