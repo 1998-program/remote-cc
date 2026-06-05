@@ -176,6 +176,15 @@
             <span class="sp-toggle-track"><span class="sp-toggle-thumb"></span></span>
           </label>
         </div>
+
+        <div class="sp-field sp-field-row">
+          <label class="sp-label">{{ t.shell_terminal_slots }}</label>
+          <div class="sp-stepper">
+            <button class="sp-step-btn" @click="changeShellSlots(-1)"><AppIcon name="minus" /></button>
+            <span class="sp-step-val">{{ settings.shellTerminalSlots }}</span>
+            <button class="sp-step-btn" @click="changeShellSlots(1)"><AppIcon name="plus" /></button>
+          </div>
+        </div>
       </section>
 
       <!-- ── 连接 ─────────────────────────────────────────────── -->
@@ -228,6 +237,33 @@
             @select="path => selectDirectory(field.key, path)"
             @cancel="dirPickerTarget = ''"
           />
+        </div>
+
+        <div class="sp-field">
+          <label class="sp-label">{{ t.agent_commands }}</label>
+          <div class="sp-agent-grid">
+            <div v-for="field in agentCommandFields" :key="field.id" class="sp-agent-row">
+              <span class="sp-agent-name">{{ field.name }}</span>
+              <input
+                v-model="settings[field.key]"
+                class="sp-input"
+                spellcheck="false"
+                autocorrect="off"
+                autocapitalize="off"
+                :placeholder="field.placeholder"
+                @blur="normalizeCommandSetting(field.key)"
+                @keyup.enter="normalizeCommandSetting(field.key)"
+              />
+              <span class="sp-status" :class="agentStatusClass(field.id)">{{ agentStatusLabel(field.id) }}</span>
+            </div>
+            <div class="sp-inline-actions">
+              <button class="sp-ghost-btn" type="button" @click="refreshAgents">
+                <AppIcon v-if="agentLoading" name="spinner" spin />
+                <AppIcon v-else name="check" />
+                {{ t.refresh_agents }}
+              </button>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -312,7 +348,7 @@
 </template>
 
 <script setup>
-import { computed, reactive, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { settings, UI_STYLES, ICON_STYLES, COLOR_THEMES, FONT_FAMILIES, resetSettings } from '../settings.js';
 import { useI18n } from '../i18n.js';
 import { api } from '../api/index.js';
@@ -330,12 +366,20 @@ const directoryFields = [
   { key: 'shellDefaultCwd', labelKey: 'shell_default_cwd', fallback: '/' },
   { key: 'newConversationDefaultDir', labelKey: 'new_conv_default_dir', fallback: '~' },
 ];
+const agentCommandFields = [
+  { id: 'claude', key: 'claudeCommand', name: 'Claude Code', placeholder: 'claude' },
+  { id: 'codex', key: 'codexCommand', name: 'Codex', placeholder: 'codex' },
+];
 
 const dirPickerTarget = ref('');
+const agentStatuses = ref([]);
+const agentLoading = ref(false);
 const passwordForm = reactive({ current: '', next: '', confirm: '' });
 const changingPassword = ref(false);
 const passwordStatus = ref('');
 const passwordError = ref('');
+let agentTimer = null;
+let agentRefreshTimer = null;
 
 const passwordCanSubmit = computed(() =>
   Boolean(passwordForm.current && passwordForm.next && passwordForm.confirm && passwordForm.next === passwordForm.confirm)
@@ -355,6 +399,16 @@ function normalizePathSetting(key, fallback) {
   settings[key] = value || fallback;
 }
 
+function normalizeCommandSetting(key) {
+  settings[key] = String(settings[key] || '').trim();
+}
+
+function changeShellSlots(delta) {
+  const current = Number(settings.shellTerminalSlots);
+  const normalized = Number.isFinite(current) ? current : 1;
+  settings.shellTerminalSlots = Math.min(6, Math.max(1, normalized + delta));
+}
+
 function toggleDirPicker(key) {
   dirPickerTarget.value = dirPickerTarget.value === key ? '' : key;
 }
@@ -363,6 +417,51 @@ function selectDirectory(key, path) {
   settings[key] = path || '/';
   dirPickerTarget.value = '';
 }
+
+const agentStatusMap = computed(() => Object.fromEntries(agentStatuses.value.map(item => [item.id, item])));
+
+function agentStatusClass(id) {
+  const status = agentStatusMap.value[id];
+  return status?.available ? 'ok' : 'err';
+}
+
+function agentStatusLabel(id) {
+  const status = agentStatusMap.value[id];
+  if (agentLoading.value && !status) return t.value.agent_checking;
+  if (!status) return t.value.agent_unknown;
+  return status.available
+    ? `${t.value.agent_available}: ${status.command || status.source || ''}`
+    : t.value.agent_missing;
+}
+
+async function refreshAgents() {
+  agentLoading.value = true;
+  try {
+    const list = await api.getAgents();
+    agentStatuses.value = Array.isArray(list) ? list : [];
+  } catch (_) {
+    agentStatuses.value = [];
+  } finally {
+    agentLoading.value = false;
+  }
+}
+
+function queueAgentRefresh() {
+  clearTimeout(agentRefreshTimer);
+  agentRefreshTimer = setTimeout(refreshAgents, 1200);
+}
+
+watch(() => [settings.claudeCommand, settings.codexCommand], queueAgentRefresh);
+
+onMounted(() => {
+  refreshAgents();
+  agentTimer = setInterval(refreshAgents, 15000);
+});
+
+onBeforeUnmount(() => {
+  clearInterval(agentTimer);
+  clearTimeout(agentRefreshTimer);
+});
 
 async function changePassword() {
   passwordStatus.value = '';
@@ -875,6 +974,31 @@ async function changePassword() {
   display: flex; align-items: center; gap: 10px;
   margin-top: 8px; flex-wrap: wrap;
 }
+.sp-agent-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  margin-top: 8px;
+}
+.sp-agent-row {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+}
+.sp-agent-name {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--text);
+}
+.sp-agent-row .sp-status {
+  grid-column: 2;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .sp-primary-btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 7px;
   background: color-mix(in srgb, var(--neon) 10%, transparent);
@@ -979,6 +1103,8 @@ async function changePassword() {
   .sp-color-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .sp-language-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .sp-icon-style-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .sp-agent-row { grid-template-columns: 1fr; }
+  .sp-agent-row .sp-status { grid-column: auto; }
   .sp-style-grid { grid-template-columns: 1fr; gap: 10px; }
   .sp-style-card { padding: 12px; }
   .sp-style-preview { height: 84px; }

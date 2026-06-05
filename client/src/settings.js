@@ -20,6 +20,7 @@ export const DEFAULTS = {
   cursorBlink:   true,
   scrollback:    5000,
   symbolBar:     true,        // 显示符号快捷键栏
+  shellTerminalSlots: 1,       // Web 终端槽位数
 
   // ── 连接 ──────────────────────────────────────
   reconnectDelay:     1000,   // ms 初始重连延迟
@@ -28,8 +29,10 @@ export const DEFAULTS = {
 
   // ── 远程控制 ──────────────────────────────────
   fileBrowserDefaultPath: '/', // 文件管理器默认目录
-  shellDefaultCwd: '/',        // 共享 Shell 默认目录
+  shellDefaultCwd: '/',        // 终端默认目录
   newConversationDefaultDir: '~', // 新建会话默认目录
+  claudeCommand: '',           // 自定义 Claude 协议命令
+  codexCommand: '',            // 自定义 Codex 协议命令
 
   // ── 账户 ──────────────────────────────────────
   username: '',

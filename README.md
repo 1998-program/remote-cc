@@ -30,7 +30,7 @@ Claude Code / Codex 都是跑在终端里的 AI 编程助手，功能强大，�
 
 - **真实终端** — 颜色、交互、鼠标全支持，和直接在本机用没有区别
 - **实时多端同步** — 手机、平板、电脑同时接入同一个 Agent 会话
-- **HTTP 回退传输** — WebSocket 被反代或接入网关拦截时，首页、Agent 终端和共享 Shell 自动改走 HTTP
+- **HTTP 回退传输** — WebSocket 被反代或接入网关拦截时，首页、Agent 终端和共享终端自动改走 HTTP
 - **持久会话** — 关闭浏览器或断开 SSH，Agent 在后台继续跑，随时 reconnect
 - **历史恢复** — 读取 Claude Code / Codex 历史，自动按工作目录恢复上次对话
 - **目录式新建任务** — 新建会话时可从服务器目录树选择工作目录
@@ -73,13 +73,13 @@ Web 端终端支持三种方式向 Claude Code 或 Codex 传递文件：
 
 支持预览的文件类型：`.md` `.txt` `.py` `.js` `.ts` `.json` `.sh` `.yaml` 等代码和文本文件，以及常见图片格式（`png` `jpg` `gif` `webp`）。
 
-设置页可以配置文件浏览器默认打开目录、Shell 默认目录、新建会话默认目录，也支持修改 Web 登录密码。
+设置页可以配置文件浏览器默认打开目录、终端默认目录、新建会话默认目录，也支持修改 Web 登录密码。
 
 ---
 
-## 共享 Shell
+## 共享终端
 
-点击顶栏终端图标打开共享 Shell。它是普通 shell PTY，不进入 RemoteCC Agent 会话列表，但会作为一个前台 Shell 会话保留：浏览器断开或刷新不会杀进程，重新打开会回放最近输出，多端打开会同步同一个 Shell。默认优先使用 `zsh`，其次 `fish`、`bash`、`sh`；也可以用 `RCC_SHELL` 或 `REMOTECC_SHELL` 指定。
+点击顶栏终端图标打开共享终端。它不进入 RemoteCC Agent 会话列表，但会作为一个前台终端会话保留：浏览器断开或刷新不会杀进程，重新打开会回放最近输出，多端打开会同步同一个终端。默认优先使用 `zsh`，其次 `fish`、`bash`、`sh`；也可以用 `RCC_SHELL` 或 `REMOTECC_SHELL` 指定。
 
 ---
 
@@ -156,22 +156,22 @@ remotecc attach <名称>  # 直接进入指定名称的会话
 
 ### 2026-06-05
 
-- **HTTP 回退传输**：WebSocket 不可用时，首页会话列表改用 HTTP 轮询，Agent 终端和共享 Shell 自动切换到 HTTP 长轮询
+- **HTTP 回退传输**：WebSocket 不可用时，首页会话列表改用 HTTP 轮询，Agent 终端和共享终端自动切换到 HTTP 长轮询
 - **反代兼容性**：补齐 `kill` / `delete` / `rename` 等会话控制操作的 HTTP 回退，支持不透传 WebSocket Upgrade 的接入层
-- **幂等性处理**：会话启动/接入、Shell 启动、resize、kill/delete 等控制操作可重复调用；终端输入保持非幂等，避免自动重试导致命令重复
+- **幂等性处理**：会话启动/接入、终端启动、resize、kill/delete 等控制操作可重复调用；终端输入保持非幂等，避免自动重试导致命令重复
 
 ### 2026-06-04
 
-- **共享 Shell**：Web Shell 改为单个前台共享会话，支持断线重连、历史回放和多端同步
-- **移动端终端**：修复手机端无法输入的问题，并支持上滑查看历史、文本选择复制、默认 MesloLGM NF 字体和 Shell 专用 `CTRL` / `ALT` / `FN` 快捷键
+- **共享终端**：Web 终端改为单个前台共享会话，支持断线重连、历史回放和多端同步
+- **移动端终端**：修复手机端无法输入的问题，并支持上滑查看历史、文本选择复制、默认 MesloLGM NF 字体和终端专用 `CTRL` / `ALT` / `FN` 快捷键
 - **设置页优化**：移动端 UI 风格预览改为整宽卡片，避免预览图被窄列压扁
 - **文档截图**：接入新版截图，按桌面、手机、TUI 分组展示
 
 ### 2026-06-03
 
 - **Web 控制台增强**：新建会话支持目录选择；文件浏览器支持 `/` 根目录、新建文件夹、上传下载和路径复制
-- **Shell 终端**：Web 顶栏新增普通 shell 终端，默认优先使用 `zsh`
-- **移动端终端**：快捷键栏仅在手机端显示，Shell 模式使用专用 shell 快捷键
+- **终端**：Web 顶栏新增通用终端，默认优先使用 `zsh`
+- **移动端终端**：快捷键栏仅在手机端显示，终端模式使用专用快捷键
 - **外观与语言**：默认 Studio + Aurora + Material，支持 9 种 UI 风格、深/浅多套配色、6 种图标风格和完整中英文切换
 - **设置持久化**：Web 设置保存到 `~/.rcc/web-settings.json`，默认目录、主题、终端偏好和语言重启后仍然有效
 - **TUI 断开修复**：修复 `rcc-tui` 新建会话后第一次 `Ctrl+]` 无法正常回菜单的问题
@@ -212,9 +212,9 @@ remotecc attach <名称>  # 直接进入指定名称的会话
 |---|---|
 | <img src="docs/assets/screenshots/web-home-desktop.jpg" alt="Web 会话列表" width="520"> | <img src="docs/assets/screenshots/web-terminal-desktop.png" alt="Web 终端" width="520"> |
 
-| 文件浏览器 | 共享 Shell |
+| 文件浏览器 | 共享终端 |
 |---|---|
-| <img src="docs/assets/screenshots/web-file-browser-desktop.jpg" alt="Web 文件浏览器" width="520"> | <img src="docs/assets/screenshots/web-shell-desktop.png" alt="Web 共享 Shell" width="520"> |
+| <img src="docs/assets/screenshots/web-file-browser-desktop.jpg" alt="Web 文件浏览器" width="520"> | <img src="docs/assets/screenshots/web-shell-desktop.png" alt="Web 共享终端" width="520"> |
 
 | 外观设置 | 终端与目录设置 |
 |---|---|

@@ -30,7 +30,7 @@ This is not screenshots or log forwarding. It is **true bidirectional real-time 
 
 - **Real terminal** — full color, interactive, and mouse support, just like using it locally
 - **Real-time multi-client sync** — phone, tablet, and desktop all share the same agent session
-- **HTTP fallback transport** — when a proxy or access gateway blocks WebSocket, Home, Agent terminals, and Shared Shell automatically fall back to HTTP
+- **HTTP fallback transport** — when a proxy or access gateway blocks WebSocket, Home, Agent terminals, and shared terminals automatically fall back to HTTP
 - **Persistent sessions** — close the browser or drop SSH, the agent keeps running; reconnect anytime
 - **History resume** — reads Claude Code / Codex history and resumes conversations in the right working directory
 - **Directory-based task creation** — choose the working directory from the server directory tree
@@ -71,15 +71,15 @@ Click the folder icon in the top bar to open the file browser. It opens at the s
 | Drag files | Drop files onto the file browser to upload them into the current directory |
 | Path input box | Type a path directly and press Enter to jump there |
 
-The settings page can configure the file browser default path, shell cwd, new-session default directory, and Web login password.
+The settings page can configure the file browser default path, terminal cwd, new-session default directory, and Web login password.
 
 Supported preview types: `.md` `.txt` `.py` `.js` `.ts` `.json` `.sh` `.yaml` and other code/text files, plus common image formats (`png` `jpg` `gif` `webp`).
 
 ---
 
-## Shared Shell
+## Shared Terminal
 
-Click the terminal icon in the top bar to open the shared Shell. It is a normal shell PTY and does not enter the RemoteCC agent session list, but it is kept as one foreground shell session: browser disconnects or refreshes do not kill it, reopening the page replays recent output, and multiple Web clients attach to the same shell. It prefers `zsh`, then `fish`, `bash`, and `sh`; set `RCC_SHELL` or `REMOTECC_SHELL` to override it.
+Click the terminal icon in the top bar to open the shared terminal. It does not enter the RemoteCC agent session list, but it is kept as one foreground terminal session: browser disconnects or refreshes do not kill it, reopening the page replays recent output, and multiple Web clients attach to the same terminal. It prefers `zsh`, then `fish`, `bash`, and `sh`; set `RCC_SHELL` or `REMOTECC_SHELL` to override it.
 
 ---
 
@@ -156,22 +156,22 @@ Inside any session: **`Ctrl+]`** goes back to the menu without killing the agent
 
 ### 2026-06-05
 
-- **HTTP fallback transport**: when WebSocket is unavailable, the Home session list refreshes by HTTP polling, and Agent terminals plus Shared Shell switch to HTTP long polling
+- **HTTP fallback transport**: when WebSocket is unavailable, the Home session list refreshes by HTTP polling, and Agent terminals plus shared terminals switch to HTTP long polling
 - **Reverse-proxy compatibility**: adds HTTP fallback for session control actions such as `kill`, `delete`, and `rename`, for access layers that do not pass WebSocket Upgrade
-- **Idempotency handling**: session start/attach, Shell start, resize, and kill/delete controls are repeat-safe; terminal input remains non-idempotent to avoid duplicated commands on retry
+- **Idempotency handling**: session start/attach, terminal start, resize, and kill/delete controls are repeat-safe; terminal input remains non-idempotent to avoid duplicated commands on retry
 
 ### 2026-06-04
 
-- **Shared shell**: Web Shell is now one foreground shared session with reconnect replay and multi-client sync
-- **Mobile terminal**: fixes mobile input and supports scrolling history, text selection/copy, default MesloLGM NF, and Shell-only `CTRL` / `ALT` / `FN` shortcuts
+- **Shared terminal**: Web terminal is now one foreground shared session with reconnect replay and multi-client sync
+- **Mobile terminal**: fixes mobile input and supports scrolling history, text selection/copy, default MesloLGM NF, and terminal-only `CTRL` / `ALT` / `FN` shortcuts
 - **Settings polish**: mobile UI-style previews now use full-width cards instead of narrow columns
 - **Docs screenshots**: refreshed screenshots and grouped desktop, mobile, and TUI images separately
 
 ### 2026-06-03
 
 - **Web console enhancements**: directory picker for new sessions, plus a file browser with `/` root access, folder creation, upload/download, and path copy
-- **Shell terminal**: adds a normal shell terminal in the Web top bar, preferring `zsh` by default
-- **Mobile terminal**: shortcut bars are mobile-only; Shell mode uses dedicated shell shortcuts
+- **Terminal**: adds a general terminal in the Web top bar, preferring `zsh` by default
+- **Mobile terminal**: shortcut bars are mobile-only; terminal mode uses dedicated shortcuts
 - **Appearance and language**: defaults to Studio + Aurora + Material, with 9 UI styles, dark/light color themes, 6 icon styles, and complete zh/en switching
 - **Settings persistence**: Web settings are saved to `~/.rcc/web-settings.json`, including default paths, themes, terminal preferences, and language
 - **TUI detach fix**: fixes first `Ctrl+]` detach after creating a session from `rcc-tui`
@@ -212,9 +212,9 @@ Inside any session: **`Ctrl+]`** goes back to the menu without killing the agent
 |---|---|
 | <img src="docs/assets/screenshots/web-home-desktop.jpg" alt="Web sessions" width="520"> | <img src="docs/assets/screenshots/web-terminal-desktop.png" alt="Web terminal" width="520"> |
 
-| File browser | Shared Shell |
+| File browser | Shared terminal |
 |---|---|
-| <img src="docs/assets/screenshots/web-file-browser-desktop.jpg" alt="Web file browser" width="520"> | <img src="docs/assets/screenshots/web-shell-desktop.png" alt="Web shared shell" width="520"> |
+| <img src="docs/assets/screenshots/web-file-browser-desktop.jpg" alt="Web file browser" width="520"> | <img src="docs/assets/screenshots/web-shell-desktop.png" alt="Web shared terminal" width="520"> |
 
 | Appearance settings | Terminal and path settings |
 |---|---|

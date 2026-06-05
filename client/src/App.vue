@@ -80,10 +80,15 @@
             @click="view = 'home'" :title="t.topbar_home_title">
             <AppIcon name="home" />
           </button>
-          <!-- Shell -->
-          <button class="topbar-icon-btn" :class="{ active: view === 'shell' }"
-            @click="openShell" :title="t.topbar_shell_title">
+          <!-- Shell slots -->
+          <button
+            v-for="id in visibleShellIds"
+            :key="id"
+            class="topbar-icon-btn shell-slot-btn"
+            :class="{ active: view === 'shell' && activeShellId === id }"
+            @click="openShell(id)" :title="shellTitle(id)">
             <AppIcon name="terminal" />
+            <span v-if="visibleShellIds.length > 1" class="topbar-icon-index">{{ id }}</span>
           </button>
           <!-- Files -->
           <button class="topbar-icon-btn" :class="{ active: view === 'files' }"
@@ -148,10 +153,14 @@
           />
         </div>
 
-        <!-- ── Shared shell ─────────────────────────────────────────── -->
-        <div v-if="shellActive" v-show="view === 'shell'" class="shell-view">
+        <!-- ── Shared terminal ──────────────────────────────────────── -->
+        <div v-if="shellActive && openedShellIds.length" v-show="view === 'shell'" class="shell-view">
           <ShellTerminal
+            v-for="id in openedShellIds"
+            v-show="id === activeShellId"
+            :key="id"
             :theme="theme"
+            :shell-id="id"
             :initial-cwd="settings.shellDefaultCwd || '/'"
             @close="closeShell"
           />
@@ -159,6 +168,10 @@
 
         <!-- ── Terminals (always in DOM, v-show to switch) ───────────── -->
         <div v-show="view === 'terminal'" class="terminal-view">
+          <div v-if="activeTerminalStatusVisible" class="terminal-status" :class="`is-${activeTerminalStatus}`">
+            <span class="terminal-status-dot"></span>
+            <span>{{ activeTerminalStatusLabel }}</span>
+          </div>
           <Terminal
             v-for="entry in termList"
             :key="entry.sid"
@@ -191,7 +204,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue';
+import { ref, reactive, shallowReactive, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue';
 import { login, logout, isLoggedIn, getSavedUsername, createWS, api, setUnauthorizedHandler } from './api/index.js';
 import Terminal          from './components/Terminal.vue';
 import LogViewer         from './components/LogViewer.vue';
@@ -357,6 +370,38 @@ const termList = reactive([]);   // Array<SessionEntry>
 const termRefs = {};             // { [sid]: Terminal component instance }
 
 const activeSessionId = ref('');
+const activeEntry = computed(() => findEntry(activeSessionId.value));
+function entryWSOpen(entry) {
+  return entry?.ws?.readyState === WebSocket.OPEN;
+}
+const activeTerminalAlive = computed(() => {
+  const entry = activeEntry.value;
+  if (!entry) return false;
+  if (entryWSOpen(entry)) return true;
+  const listed = sessionList.value.find(s => s.sessionId === entry.sid || s.sessionId === entry.attachSessionId);
+  return listed?.alive ?? entry.alive;
+});
+const activeTerminalStatus = computed(() => {
+  const entry = activeEntry.value;
+  if (!entry) return 'closed';
+  if (entryWSOpen(entry)) return 'connected';
+  if (entry.connectionStatus === 'connecting' && activeTerminalAlive.value && !entry._reconnectNoticePending) return 'connected';
+  return entry.connectionStatus || (activeTerminalAlive.value ? 'connected' : 'closed');
+});
+const activeTerminalStatusVisible = computed(() => {
+  const entry = activeEntry.value;
+  if (!entry) return false;
+  return activeTerminalStatus.value !== 'connected' || !!entry.connectedBadgeVisible;
+});
+const activeTerminalStatusLabel = computed(() => {
+  const entry = activeEntry.value;
+  const transport = entryWSOpen(entry) ? 'ws' : (entry?.transport || 'ws');
+  if (activeTerminalStatus.value === 'connected') return `${t.value.shell_status_connected} · ${transport.toUpperCase()}`;
+  if (activeTerminalStatus.value === 'connecting') return t.value.shell_status_reconnecting;
+  if (activeTerminalStatus.value === 'closed') return t.value.shell_status_closed;
+  if (activeTerminalStatus.value === 'error') return t.value.shell_status_error;
+  return activeTerminalStatus.value;
+});
 const currentMeta = computed(() => {
   const fromList = sessionList.value.find(s => s.sessionId === activeSessionId.value);
   if (fromList) return fromList;
@@ -367,6 +412,48 @@ const currentMeta = computed(() => {
 
 function findEntry(sid) { return termList.find(e => e.sid === sid); }
 
+function clearEntryConnectionBadge(entry) {
+  if (!entry?._connectedBadgeTimer) return;
+  clearTimeout(entry._connectedBadgeTimer);
+  entry._connectedBadgeTimer = null;
+}
+
+function markEntryDisconnected(entry) {
+  if (!entry) return;
+  if (entry._hasConnected) entry._reconnectNoticePending = true;
+  entry.connectedBadgeVisible = false;
+  clearEntryConnectionBadge(entry);
+}
+
+function markEntryConnected(entry, transport, { refresh = true } = {}) {
+  if (!entry) return;
+  const shouldShowBadge = !entry._hasConnected ||
+    entry._reconnectNoticePending ||
+    entry.connectionStatus !== 'connected' ||
+    entry.transport !== transport;
+  const shouldRefresh = refresh || entry._reconnectNoticePending;
+  entry.transport = transport;
+  entry.connectionStatus = 'connected';
+  entry.alive = true;
+  entry._hasConnected = true;
+  entry._reconnectNoticePending = false;
+  if (shouldShowBadge) {
+    entry.connectedBadgeVisible = true;
+    clearEntryConnectionBadge(entry);
+    entry._connectedBadgeTimer = setTimeout(() => {
+      entry.connectedBadgeVisible = false;
+      entry._connectedBadgeTimer = null;
+    }, 3000);
+  }
+  if (shouldRefresh) {
+    nextTick(() => {
+      const el = termRefs[entry.sid];
+      el?.fit?.();
+      el?.scrollToBottom?.();
+    });
+  }
+}
+
 // ── Per-session WS ────────────────────────────────────────────────────────────
 function connectEntryWS(entry) {
   if (entry._destroy) { entry._destroy(); entry._destroy = null; }
@@ -375,27 +462,68 @@ function connectEntryWS(entry) {
   let reconnDelay = 1000;
   let reconnTimeout = null;
   let fallbackTimer = null;
+  let heartbeatTimer = null;
+  let heartbeatTimeout = null;
   let opened = false;
 
   const ws = createWS();
   entry.ws = ws;
   entry.transport = 'ws';
+  entry.connectionStatus = 'connecting';
 
-  function switchToHttpFallback() {
-    if (destroyed || opened) return;
-    destroyed = true;
+  function clearWsTimers() {
     clearTimeout(reconnTimeout);
     clearTimeout(fallbackTimer);
+    clearInterval(heartbeatTimer);
+    clearTimeout(heartbeatTimeout);
+    reconnTimeout = null;
+    fallbackTimer = null;
+    heartbeatTimer = null;
+    heartbeatTimeout = null;
+  }
+
+  function forceHttpFallback() {
+    if (destroyed) return;
+    destroyed = true;
+    markEntryDisconnected(entry);
+    clearWsTimers();
     try { ws.close(); } catch (_) {}
     startEntryHttp(entry);
   }
 
+  function switchToHttpFallback() {
+    if (destroyed || opened) return;
+    forceHttpFallback();
+  }
+
   fallbackTimer = setTimeout(switchToHttpFallback, WS_FALLBACK_DELAY);
+
+  function markHeartbeatAlive() {
+    clearTimeout(heartbeatTimeout);
+    heartbeatTimeout = null;
+  }
+
+  function startHeartbeat() {
+    clearInterval(heartbeatTimer);
+    clearTimeout(heartbeatTimeout);
+    heartbeatTimer = setInterval(() => {
+      if (destroyed || ws.readyState !== WebSocket.OPEN) return;
+      try {
+        ws.send(JSON.stringify({ type: 'terminal_ping', sessionId: entry.attachSessionId || entry.sid, ts: Date.now() }));
+      } catch (_) {
+        forceHttpFallback();
+        return;
+      }
+      clearTimeout(heartbeatTimeout);
+      heartbeatTimeout = setTimeout(forceHttpFallback, 8000);
+    }, 25000);
+  }
 
   ws.onopen = () => {
     opened = true;
     clearTimeout(fallbackTimer);
     reconnDelay = 1000;
+    markEntryConnected(entry, 'ws', { refresh: false });
 
     // nextTick 确保 Terminal 组件已 mount 并完成初始 fit
     nextTick(() => {
@@ -451,17 +579,26 @@ function connectEntryWS(entry) {
             entry.attachSessionId = realId;
             localStorage.setItem('rcc_last_session', realId);
           }
+          markEntryConnected(entry, 'ws');
+          markHeartbeatAlive();
+          startHeartbeat();
           return;
         }
+        case 'terminal_pong':
+          markHeartbeatAlive();
+          return;
         case 'session_list':
           applySessionList(msg.sessions);
+          if (entry.connectionStatus === 'connecting') markEntryConnected(entry, 'ws', { refresh: false });
           return;
         case 'replay_start': {
+          if (entry.connectionStatus !== 'connected') markEntryConnected(entry, 'ws', { refresh: false });
           const el = termRefs[entry.sid];
           if (el) el.clear();
           return;
         }
         case 'replay_end': {
+          if (entry.connectionStatus !== 'connected') markEntryConnected(entry, 'ws', { refresh: false });
           const el = termRefs[entry.sid];
           if (el) {
             el.fit();
@@ -476,18 +613,21 @@ function connectEntryWS(entry) {
           return;
         }
         case 'error': {
-          const el = termRefs[entry.sid];
-          if (el) el.write(`\r\n\x1b[31m[${t.value.error_prefix}${msg.message}]\x1b[0m\r\n`);
+          entry.connectionStatus = 'error';
+          entry.connectedBadgeVisible = false;
+          clearEntryConnectionBadge(entry);
           return;
         }
         case 'detached': {
-          const el = termRefs[entry.sid];
-          if (el) el.write(`\r\n\x1b[33m[${t.value.taken_over}]\x1b[0m\r\n`);
+          entry.connectionStatus = 'closed';
+          entry.connectedBadgeVisible = false;
+          clearEntryConnectionBadge(entry);
           return;
         }
       }
     } catch (_) {}
     // Raw PTY data
+    if (entry.connectionStatus !== 'connected') markEntryConnected(entry, 'ws', { refresh: false });
     const el = termRefs[entry.sid];
     if (el) el.write(data);
   };
@@ -497,14 +637,14 @@ function connectEntryWS(entry) {
   };
 
   ws.onclose = () => {
-    clearTimeout(fallbackTimer);
+    clearWsTimers();
     if (destroyed) return;
     if (!opened) {
       switchToHttpFallback();
       return;
     }
-    const el = termRefs[entry.sid];
-    if (el) el.write(`\r\n\x1b[33m[${t.value.disconnected} ${(reconnDelay/1000).toFixed(1)}${t.value.reconnecting}]\x1b[0m\r\n`);
+    markEntryDisconnected(entry);
+    entry.connectionStatus = 'connecting';
     reconnTimeout = setTimeout(() => {
       if (destroyed) return;
       reconnDelay = Math.min(reconnDelay * 1.5, 15000);
@@ -514,8 +654,7 @@ function connectEntryWS(entry) {
 
   entry._destroy = () => {
     destroyed = true;
-    clearTimeout(reconnTimeout);
-    clearTimeout(fallbackTimer);
+    clearWsTimers();
     try { ws.close(); } catch (_) {}
   };
 }
@@ -537,20 +676,30 @@ function applyHttpSessionSnapshot(entry, snapshot, shouldClear = false) {
   if (typeof snapshot.alive === 'boolean') entry.alive = snapshot.alive;
 
   const el = termRefs[entry.sid];
+  const shouldRefresh = Boolean(shouldClear || snapshot.reset || snapshot.output || entry._reconnectNoticePending);
   if ((shouldClear || snapshot.reset) && el) el.clear();
   if (snapshot.output && el) el.write(snapshot.output);
   if (el && snapshot.output) nextTick(() => el.scrollToBottom());
+  if (snapshot.alive === false) {
+    entry.connectionStatus = 'closed';
+    entry.connectedBadgeVisible = false;
+    clearEntryConnectionBadge(entry);
+    return;
+  }
+  markEntryConnected(entry, 'http', { refresh: shouldRefresh });
 }
 
 function handleEntryExit(entry, exitCode) {
   if (entry._exitHandled) return;
   entry._exitHandled = true;
   entry.alive = false;
-  const el = termRefs[entry.sid];
-  if (el) el.write(`\r\n\x1b[33m[${t.value.exited} ${exitCode}]\x1b[0m\r\n`);
+  entry.connectionStatus = 'closed';
+  entry.connectedBadgeVisible = false;
+  clearEntryConnectionBadge(entry);
   setTimeout(() => {
     const sid = entry.sid;
     entry._destroy?.();
+    clearEntryConnectionBadge(entry);
     const idx = termList.findIndex(e => e.sid === sid);
     if (idx !== -1) { delete termRefs[sid]; termList.splice(idx, 1); }
     if (activeSessionId.value === sid) {
@@ -571,6 +720,7 @@ async function startEntryHttp(entry) {
   let retryDelay = 1000;
   let openRetryDelay = 1000;
   entry.transport = 'http';
+  entry.connectionStatus = 'connecting';
   entry.ws = null;
 
   const poll = async (cursor) => {
@@ -579,6 +729,9 @@ async function startEntryHttp(entry) {
         const result = await api.terminal.poll(entry.attachSessionId || entry.sid, cursor, HTTP_POLL_WAIT);
         retryDelay = 1000;
         if (destroyed) return;
+        markEntryConnected(entry, 'http', {
+          refresh: Boolean(result.reset || result.output || entry._reconnectNoticePending),
+        });
         if (result.reset) termRefs[entry.sid]?.clear?.();
         if (result.output) termRefs[entry.sid]?.write?.(result.output);
         cursor = result.cursor ?? cursor;
@@ -588,7 +741,8 @@ async function startEntryHttp(entry) {
         }
       } catch (_) {
         if (destroyed) return;
-        termRefs[entry.sid]?.write?.(`\r\n\x1b[33m[${t.value.disconnected} ${(retryDelay/1000).toFixed(1)}${t.value.reconnecting}]\x1b[0m\r\n`);
+        markEntryDisconnected(entry);
+        entry.connectionStatus = 'connecting';
         await new Promise(resolve => setTimeout(resolve, retryDelay));
         retryDelay = Math.min(retryDelay * 1.5, 15000);
       }
@@ -620,8 +774,8 @@ async function startEntryHttp(entry) {
       return;
     } catch (_) {
       if (destroyed) return;
-      const el = termRefs[entry.sid];
-      if (el) el.write(`\r\n\x1b[33m[${t.value.disconnected} ${(openRetryDelay/1000).toFixed(1)}${t.value.reconnecting}]\x1b[0m\r\n`);
+      markEntryDisconnected(entry);
+      entry.connectionStatus = 'connecting';
       await new Promise(resolve => setTimeout(resolve, openRetryDelay));
       openRetryDelay = Math.min(openRetryDelay * 1.5, 15000);
     }
@@ -635,6 +789,26 @@ const logTarget    = ref(null);
 const switcherOpen = ref(false);
 const switcherRef  = ref(null);
 const shellActive  = ref(false);
+const activeShellId = ref('1');
+const shellOpenIds = reactive(new Set());
+
+function normalizedShellSlotCount() {
+  return Math.min(6, Math.max(1, Number(settings.shellTerminalSlots) || 1));
+}
+
+function sortShellIds(ids) {
+  return [...ids].sort((a, b) => (Number(a) || 0) - (Number(b) || 0) || String(a).localeCompare(String(b)));
+}
+
+const configuredShellIds = computed(() =>
+  Array.from({ length: normalizedShellSlotCount() }, (_, i) => String(i + 1))
+);
+const visibleShellIds = computed(() => sortShellIds(new Set([...configuredShellIds.value, ...shellOpenIds])));
+const openedShellIds = computed(() => sortShellIds(shellOpenIds));
+
+function shellTitle(id) {
+  return visibleShellIds.value.length > 1 ? `${t.value.topbar_shell_title} ${id}` : t.value.topbar_shell_title;
+}
 
 function openSession(s) {
   // Already have this session open
@@ -646,7 +820,7 @@ function openSession(s) {
     return;
   }
 
-  const entry = {
+  const entry = shallowReactive({
     sid: s.sessionId,
     ws: null,
     alive: !!s.alive,
@@ -656,8 +830,11 @@ function openSession(s) {
     agent: s.agent || 'claude',
     resumeSessionId: '',
     attachSessionId: s.sessionId,
+    transport: 'ws',
+    connectionStatus: 'connecting',
+    connectedBadgeVisible: false,
     _destroy: null,
-  };
+  });
   termList.push(entry);
   activeSessionId.value = s.sessionId;
   view.value = 'terminal';
@@ -681,7 +858,7 @@ function startSession({ workingDir, name, resumeSessionId, agent = 'claude' }) {
   }
 
   const placeholder = `pending-${Date.now()}`;
-  const entry = {
+  const entry = shallowReactive({
     sid: placeholder,
     ws: null,
     alive: true,
@@ -691,8 +868,11 @@ function startSession({ workingDir, name, resumeSessionId, agent = 'claude' }) {
     agent,
     resumeSessionId: resumeSessionId || '',
     attachSessionId: '',
+    transport: 'ws',
+    connectionStatus: 'connecting',
+    connectedBadgeVisible: false,
     _destroy: null,
-  };
+  });
   termList.push(entry);
   activeSessionId.value = placeholder;
   view.value = 'terminal';
@@ -726,6 +906,7 @@ function confirmKillAndExit() {
   const idx = termList.findIndex(e => e.sid === s.sessionId);
   if (idx !== -1) {
     termList[idx]._destroy?.();
+    clearEntryConnectionBadge(termList[idx]);
     delete termRefs[s.sessionId];
     termList.splice(idx, 1);
   }
@@ -738,6 +919,7 @@ function deleteSession(s) {
   const idx = termList.findIndex(e => e.sid === s.sessionId);
   if (idx !== -1) {
     termList[idx]._destroy?.();
+    clearEntryConnectionBadge(termList[idx]);
     delete termRefs[s.sessionId];
     termList.splice(idx, 1);
   }
@@ -757,7 +939,10 @@ function openLog(s) {
   view.value = 'log';
 }
 
-function openShell() {
+function openShell(id = '1') {
+  const shellId = String(id || '1');
+  shellOpenIds.add(shellId);
+  activeShellId.value = shellId;
   shellActive.value = true;
   view.value = 'shell';
   switcherOpen.value = false;
@@ -773,11 +958,18 @@ function doLogout() {
   authed.value = false;
   view.value = 'home';
   shellActive.value = false;
+  shellOpenIds.clear();
+  activeShellId.value = '1';
   remoteSettingsReady = false;
   clearTimeout(settingsSaveTimer);
   clearTimeout(reconnTimer);
   clearTimeout(controlFallbackTimer);
   stopControlHttpPolling();
+  for (const entry of termList) {
+    entry._destroy?.();
+    clearEntryConnectionBadge(entry);
+  }
+  termList.splice(0);
   settings.username = '';
   sessionsLoading.value = true;
 }
@@ -787,6 +979,8 @@ setUnauthorizedHandler(() => {
   authed.value = false;
   view.value = 'home';
   shellActive.value = false;
+  shellOpenIds.clear();
+  activeShellId.value = '1';
   remoteSettingsReady = false;
   clearTimeout(settingsSaveTimer);
   // 清理所有 WS 连接
@@ -794,7 +988,10 @@ setUnauthorizedHandler(() => {
   clearTimeout(controlFallbackTimer);
   stopControlHttpPolling();
   controlWS?.close();
-  for (const entry of termList) entry._destroy?.();
+  for (const entry of termList) {
+    entry._destroy?.();
+    clearEntryConnectionBadge(entry);
+  }
   termList.splice(0);
   sessionList.value = [];
   sessionsLoading.value = true;
@@ -1777,6 +1974,33 @@ select:focus-visible {
   border-color: var(--border-strong);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--neon) 16%, transparent), 0 0 16px var(--glow);
 }
+.shell-slot-btn {
+  position: relative;
+}
+.topbar-icon-index {
+  position: absolute;
+  right: 3px;
+  bottom: 2px;
+  min-width: 10px;
+  height: 10px;
+  padding: 0 2px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 5px;
+  background: var(--panel3);
+  border: 1px solid var(--border);
+  color: var(--neon2);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 8px;
+  font-weight: 800;
+  line-height: 1;
+}
+.topbar-icon-btn.active .topbar-icon-index {
+  color: var(--bg);
+  background: var(--neon);
+  border-color: var(--neon);
+}
 
 /* ── Session switcher ──────────────────────────────────────────── */
 .session-switcher { position: relative; min-width: 0; flex: 1; }
@@ -1883,7 +2107,50 @@ select:focus-visible {
 /* Terminal fills its parent */
 .terminal-view,
 .shell-view {
+  position: relative;
   flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden;
+}
+.terminal-status {
+  position: absolute;
+  z-index: 4;
+  top: 8px;
+  right: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: min(220px, calc(100% - 20px));
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--panel) 84%, transparent);
+  color: var(--muted);
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+  pointer-events: none;
+  box-shadow: 0 8px 20px color-mix(in srgb, #000 20%, transparent);
+}
+.terminal-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 8px currentColor;
+  flex-shrink: 0;
+}
+.terminal-status.is-connected {
+  color: var(--success);
+  border-color: color-mix(in srgb, var(--success) 36%, var(--border));
+}
+.terminal-status.is-connecting {
+  color: var(--warning);
+  border-color: color-mix(in srgb, var(--warning) 36%, var(--border));
+}
+.terminal-status.is-closed,
+.terminal-status.is-error {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 36%, var(--border));
 }
 </style>
 

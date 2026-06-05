@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const { getWebSettings } = require('./web-settings');
 
 const IS_WIN = process.platform === 'win32';
 const DEFAULT_AGENT = (process.env.RCC_AGENT || 'claude').toLowerCase();
@@ -77,21 +78,61 @@ function commandExists(command) {
   }));
 }
 
-function findAgentBin(agentId) {
+function executableExists(command) {
+  if (!command) return false;
+  if (!command.includes(path.sep)) return commandExists(command);
+  try { fs.accessSync(command, fs.constants.X_OK); return true; } catch (_) { return false; }
+}
+
+function customCommandFor(agentId) {
+  try {
+    const settings = getWebSettings().settings || {};
+    const key = `${normalizeAgent(agentId)}Command`;
+    return typeof settings[key] === 'string' ? settings[key].trim() : '';
+  } catch (_) {
+    return '';
+  }
+}
+
+function resolveAgentBin(agentId) {
   const cfg = AGENTS[normalizeAgent(agentId)];
+  const custom = customCommandFor(cfg.id);
+  if (custom) {
+    return {
+      command: custom,
+      available: executableExists(custom),
+      source: 'settings',
+    };
+  }
+
   const fromEnv = process.env[cfg.envVar];
-  if (fromEnv) return fromEnv;
+  if (fromEnv) {
+    return {
+      command: fromEnv,
+      available: executableExists(fromEnv),
+      source: cfg.envVar,
+    };
+  }
 
   const candidates = IS_WIN ? cfg.windowsCandidates : cfg.unixCandidates;
   for (const c of candidates) {
     if (!c) continue;
     if (!c.includes(path.sep)) {
-      if (commandExists(c)) return c;
+      if (commandExists(c)) return { command: c, available: true, source: 'PATH' };
       continue;
     }
-    try { fs.accessSync(c, fs.constants.X_OK); return c; } catch (_) {}
+    try { fs.accessSync(c, fs.constants.X_OK); return { command: c, available: true, source: 'known-path' }; } catch (_) {}
   }
-  return cfg.command;
+
+  return {
+    command: cfg.command,
+    available: commandExists(cfg.command),
+    source: 'default',
+  };
+}
+
+function findAgentBin(agentId) {
+  return resolveAgentBin(agentId).command;
 }
 
 function getAgentConfig(agent) {
@@ -131,12 +172,29 @@ function buildAgentEnv(agent, baseEnv = process.env, clientEnv = {}) {
   };
 }
 
+function getAgentStatuses() {
+  const defaultAgent = normalizeAgent(DEFAULT_AGENT);
+  return Object.values(AGENTS).map(cfg => {
+    const resolved = resolveAgentBin(cfg.id);
+    return {
+      id: cfg.id,
+      label: cfg.label,
+      available: resolved.available,
+      command: resolved.command,
+      source: resolved.source,
+      default: cfg.id === defaultAgent,
+    };
+  });
+}
+
 module.exports = {
   AGENTS,
   PROXY_ENV_KEYS,
   DEFAULT_AGENT: normalizeAgent(DEFAULT_AGENT),
   normalizeAgent,
+  resolveAgentBin,
   findAgentBin,
+  getAgentStatuses,
   getAgentConfig,
   withoutProxyEnv,
   getAgentProxyEnv,

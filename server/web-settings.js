@@ -17,6 +17,7 @@ const DEFAULTS = {
   cursorBlink: true,
   scrollback: 5000,
   symbolBar: true,
+  shellTerminalSlots: 1,
 
   reconnectDelay: 1000,
   maxReconnectDelay: 15000,
@@ -25,6 +26,8 @@ const DEFAULTS = {
   fileBrowserDefaultPath: '/',
   shellDefaultCwd: '/',
   newConversationDefaultDir: '~',
+  claudeCommand: '',
+  codexCommand: '',
 
   username: '',
   language: 'zh',
@@ -39,6 +42,8 @@ const STRING_LIMITS = {
   fileBrowserDefaultPath: 2048,
   shellDefaultCwd: 2048,
   newConversationDefaultDir: 2048,
+  claudeCommand: 2048,
+  codexCommand: 2048,
   username: 128,
   language: 16,
 };
@@ -48,6 +53,7 @@ const NUMBER_LIMITS = {
   fontSize: [8, 24],
   lineHeight: [1, 2],
   scrollback: [500, 50000],
+  shellTerminalSlots: [1, 6],
   reconnectDelay: [500, 10000],
   maxReconnectDelay: [5000, 60000],
 };

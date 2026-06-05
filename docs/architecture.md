@@ -69,9 +69,9 @@ sessions: Map<sessionId, {
 **关键机制**：
 - 同 `workingDir + resumeSessionId` 已有活跃会话 → 直接 attach，不重复创建
 - PTY 输出广播给所有 clients（WS + Unix Socket）
-- Web 端默认走 WS；WS Upgrade 不可用时，会话列表走 HTTP 轮询，Agent/Shell 终端走 HTTP 长轮询
+- Web 端默认走 WS；WS Upgrade 不可用时，会话列表和终端都可切换到 HTTP 轮询
 - 会话退出 5s 后自动清理并广播列表更新
-- Web 共享 Shell 是独立的单前台 PTY，会在浏览器断开后保留并向新客户端回放 scrollback
+- Web 共享终端是独立的单前台 PTY，会在浏览器断开后保留并向新客户端回放 scrollback
 
 #### `server/fs-handler.js`
 
@@ -167,9 +167,9 @@ Hot-reloadable business layer, listens on Unix Socket, handles Express routes vi
 PTY session pool, loaded by proxy.js, lifecycle tied to proxy:
 - Same `workingDir + resumeSessionId` with active session → attach directly
 - PTY output broadcast to all clients (WS + Unix Socket)
-- Web uses WS by default; if WS Upgrade is unavailable, the session list uses HTTP polling and Agent/Shell terminals use HTTP long polling
+- Web uses WS by default; if WS Upgrade is unavailable, session lists and terminals can switch to HTTP polling
 - Session auto-removed 5s after PTY exits
-- The Web shared Shell is an independent single foreground PTY, preserved across browser disconnects and replayed to new clients
+- The Web shared terminal is an independent single foreground PTY, preserved across browser disconnects and replayed to new clients
 
 #### `server/fs-handler.js`
 

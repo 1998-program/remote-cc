@@ -7,6 +7,7 @@ const os = require('os');
 const { v4: uuidv4 } = require('uuid');
 const { httpAuth, wsAuth, loginHandler, changePasswordHandler } = require('./auth');
 const { getProjects, getSessions, readSession } = require('./history');
+const { getAgentStatuses } = require('./agent-config');
 const {
   handleMessage, closeWS, listSessions, readLog, registerWS, unregisterWS,
   startSessionHttp, attachSessionHttp, inputSessionHttp, resizeSessionHttp, pollSessionHttp,
@@ -111,6 +112,7 @@ app.post('/api/upload', (req, res) => {
   req.on('error', e => res.status(500).json({ error: e.message }));
 });
 
+app.get('/api/agents',                 (req, res) => { try { res.set('Cache-Control', 'no-store').json(getAgentStatuses()); } catch (e) { res.status(500).json({ error: e.message }); } });
 app.get('/api/projects',               (req, res) => { try { res.json(getProjects(req.query.agent)); }                     catch (e) { res.status(500).json({ error: e.message }); } });
 app.get('/api/sessions/:projectId',    (req, res) => { try { res.json(getSessions(req.params.projectId, req.query.agent)); } catch (e) { res.status(500).json({ error: e.message }); } });
 app.get('/api/session/:sessionId',     (req, res) => { try { res.json(readSession(req.params.sessionId, req.query.agent)); } catch (e) { res.status(500).json({ error: e.message }); } });
@@ -171,6 +173,25 @@ app.post('/api/shell/kill', (req, res) => {
 });
 app.get('/api/shell/poll', (req, res) => {
   routeResult(res, () => pollShellHttp({
+    cursor: req.query.cursor,
+    wait: req.query.wait,
+  }));
+});
+app.post('/api/shell/:shellId/start', (req, res) => {
+  routeResult(res, () => startShellHttp({ ...(req.body || {}), shellId: req.params.shellId }));
+});
+app.post('/api/shell/:shellId/input', (req, res) => {
+  routeResult(res, () => inputShellHttp({ ...(req.body || {}), shellId: req.params.shellId }));
+});
+app.post('/api/shell/:shellId/resize', (req, res) => {
+  routeResult(res, () => resizeShellHttp({ ...(req.body || {}), shellId: req.params.shellId }));
+});
+app.post('/api/shell/:shellId/kill', (req, res) => {
+  routeResult(res, () => killShellHttp(req.params.shellId));
+});
+app.get('/api/shell/:shellId/poll', (req, res) => {
+  routeResult(res, () => pollShellHttp({
+    shellId: req.params.shellId,
     cursor: req.query.cursor,
     wait: req.query.wait,
   }));

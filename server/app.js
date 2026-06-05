@@ -20,6 +20,7 @@ const { v4: uuidv4 } = require('uuid');
 const { getProjects, getSessions, readSession } = require('./history');
 const { listDir, readFilePreview, statFile, createDirectory, writeUploadedFile, readDownloadFile } = require('./fs-handler');
 const { getSettingsHandler, saveSettingsHandler } = require('./web-settings');
+const { getAgentStatuses } = require('./agent-config');
 
 const APP_SOCK = '/tmp/rcc-app.sock';
 const RCC_DIR  = path.join(os.homedir(), '.rcc');
@@ -72,6 +73,7 @@ app.post('/api/upload', (req, res) => {
   req.on('error', e => res.status(500).json({ error: e.message }));
 });
 
+app.get('/api/agents',              (req, res) => { try { res.set('Cache-Control', 'no-store').json(getAgentStatuses()); } catch (e) { res.status(500).json({ error: e.message }); } });
 app.get('/api/projects',            (req, res) => { try { res.json(getProjects(req.query.agent)); }                      catch (e) { res.status(500).json({ error: e.message }); } });
 app.get('/api/sessions/:projectId', (req, res) => { try { res.json(getSessions(req.params.projectId, req.query.agent)); } catch (e) { res.status(500).json({ error: e.message }); } });
 app.get('/api/session/:sessionId',  (req, res) => { try { res.json(readSession(req.params.sessionId, req.query.agent)); } catch (e) { res.status(500).json({ error: e.message }); } });

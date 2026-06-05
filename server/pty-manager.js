@@ -63,8 +63,8 @@ function expandHome(input) {
 const sessions = new Map();
 const wsToSession = new Map(); // wsId → { sessionId, client }
 const allWS = new Map();       // wsId → ws  (所有已连接的 WS，无论是否 attach 了 session)
-const wsToShellClient = new Map(); // wsId → shared shell client
-let shellSession = null;       // Single foreground shell PTY shared by all Web shell clients
+const wsToShellClient = new Map(); // wsId → { shellId, client }
+const shellSessions = new Map();   // shellId → shared shell PTY
 
 function apiError(status, message) {
   const err = new Error(message);
@@ -527,23 +527,37 @@ function selectShellBin() {
   return '/bin/sh';
 }
 
-function trimShellBuffer() {
-  if (!shellSession?.buffer || shellSession.buffer.length <= SCROLLBACK_LIMIT) return;
-  trimBuffer(shellSession);
+function normalizeShellId(shellId) {
+  const raw = String(shellId || '1').trim();
+  const safe = raw.replace(/[^a-zA-Z0-9._-]/g, '').slice(0, 32);
+  return safe || '1';
+}
+
+function getShell(shellId = '1') {
+  return shellSessions.get(normalizeShellId(shellId));
+}
+
+function trimShellBuffer(shell) {
+  if (!shell?.buffer || shell.buffer.length <= SCROLLBACK_LIMIT) return;
+  trimBuffer(shell);
 }
 
 function detachShellClient(wsId) {
-  const client = wsToShellClient.get(wsId);
-  if (!client || !shellSession) return;
-  shellSession.clients.delete(client);
+  const binding = wsToShellClient.get(wsId);
+  if (!binding) return;
+  const shell = getShell(binding.shellId);
+  if (shell) shell.clients.delete(binding.client);
   wsToShellClient.delete(wsId);
 }
 
-function destroyShell() {
-  if (!shellSession) return;
-  const shell = shellSession;
-  shellSession = null;
-  wsToShellClient.clear();
+function destroyShell(shellId = '1') {
+  const id = normalizeShellId(shellId);
+  const shell = getShell(id);
+  if (!shell) return;
+  shellSessions.delete(id);
+  for (const [wsId, binding] of wsToShellClient.entries()) {
+    if (binding.shellId === id) wsToShellClient.delete(wsId);
+  }
   try { if (shell.ptyProcess) shell.ptyProcess.kill(); } catch (_) {}
   for (const client of shell.clients) {
     client.sendJSON({ type: 'shell_exit', exitCode: null });
@@ -551,7 +565,8 @@ function destroyShell() {
   notifyHttpWaiters(shell);
 }
 
-function spawnSharedShell(ws, { cwd, cols = 80, rows = 24, env: clientEnv = {} }) {
+function spawnSharedShell(ws, { shellId = '1', cwd, cols = 80, rows = 24, env: clientEnv = {} }) {
+  const id = normalizeShellId(shellId);
   const shellCwd = resolveShellCwd(cwd);
   const shellBin = selectShellBin();
   const shellEnv = {
@@ -577,6 +592,7 @@ function spawnSharedShell(ws, { cwd, cols = 80, rows = 24, env: clientEnv = {} }
   }
 
   const shell = {
+    shellId: id,
     ptyProcess,
     clients: new Set(),
     buffer: '',
@@ -589,18 +605,18 @@ function spawnSharedShell(ws, { cwd, cols = 80, rows = 24, env: clientEnv = {} }
     createdAt: Date.now(),
     lastActiveAt: Date.now(),
   };
-  shellSession = shell;
+  shellSessions.set(id, shell);
 
   ptyProcess.onData(data => {
-    if (!shellSession || shellSession !== shell) return;
+    if (getShell(id) !== shell) return;
     shell.buffer += data;
-    trimShellBuffer();
+    trimShellBuffer(shell);
     shell.lastActiveAt = Date.now();
     notifyHttpWaiters(shell);
     for (const client of shell.clients) client.send(data);
   });
   ptyProcess.onExit(({ exitCode }) => {
-    if (shellSession !== shell) return;
+    if (getShell(id) !== shell) return;
     shell.exitCode = exitCode;
     shell.ptyProcess = null;
     shell.lastActiveAt = Date.now();
@@ -611,11 +627,12 @@ function spawnSharedShell(ws, { cwd, cols = 80, rows = 24, env: clientEnv = {} }
   return shell;
 }
 
-function attachShell(ws, wsId, { cwd, cols = 80, rows = 24, env = {} }) {
+function attachShell(ws, wsId, { shellId = '1', cwd, cols = 80, rows = 24, env = {} }) {
+  const id = normalizeShellId(shellId);
   detachShellClient(wsId);
-  let shell = shellSession;
+  let shell = getShell(id);
   if (!shell || !shell.ptyProcess) {
-    shell = spawnSharedShell(ws, { cwd, cols, rows, env });
+    shell = spawnSharedShell(ws, { shellId: id, cwd, cols, rows, env });
     if (!shell) return;
   }
 
@@ -623,7 +640,7 @@ function attachShell(ws, wsId, { cwd, cols = 80, rows = 24, env = {} }) {
   client.cols = cols || shell.cols || 80;
   client.rows = rows || shell.rows || 24;
   shell.clients.add(client);
-  wsToShellClient.set(wsId, client);
+  wsToShellClient.set(wsId, { shellId: id, client });
 
   if (shell.buffer) {
     client.sendJSON({ type: 'shell_replay_start' });
@@ -632,6 +649,7 @@ function attachShell(ws, wsId, { cwd, cols = 80, rows = 24, env = {} }) {
   }
   client.sendJSON({
     type: 'shell_ready',
+    shellId: id,
     cwd: shell.cwd,
     alive: !!shell.ptyProcess,
     clientCount: shell.clients.size,
@@ -653,11 +671,12 @@ function handleMessage(ws, wsId, raw) {
   // 如果解析失败，或解析结果不是带 type 字段的对象（例如 "1" 被 JSON.parse 解析为数字 1）
   // 则视为原始 PTY 输入（raw string）
   if (!msg || typeof msg !== 'object' || !msg.type) {
-    const shellClient = wsToShellClient.get(wsId);
-    if (shellSession?.ptyProcess && shellClient) {
-      try { shellSession.ptyProcess.resize(shellClient.cols || 80, shellClient.rows || 24); } catch (_) {}
-      shellSession.ptyProcess.write(raw);
-      shellSession.lastActiveAt = Date.now();
+    const shellBinding = wsToShellClient.get(wsId);
+    const shell = shellBinding && getShell(shellBinding.shellId);
+    if (shell?.ptyProcess && shellBinding?.client) {
+      try { shell.ptyProcess.resize(shellBinding.client.cols || 80, shellBinding.client.rows || 24); } catch (_) {}
+      shell.ptyProcess.write(raw);
+      shell.lastActiveAt = Date.now();
       return;
     }
 
@@ -681,32 +700,44 @@ function handleMessage(ws, wsId, raw) {
       break;
 
     case 'shell_resize': {
-      const shellClient = wsToShellClient.get(wsId);
+      const shellBinding = wsToShellClient.get(wsId);
+      const shellClient = shellBinding?.client;
       if (shellClient) {
         shellClient.cols = msg.cols || 80;
         shellClient.rows = msg.rows || 24;
       }
-      if (shellSession?.ptyProcess && shellClient) {
-        shellSession.cols = shellClient.cols;
-        shellSession.rows = shellClient.rows;
-        try { shellSession.ptyProcess.resize(shellClient.cols, shellClient.rows); } catch (_) {}
+      const shell = shellBinding && getShell(shellBinding.shellId);
+      if (shell?.ptyProcess && shellClient) {
+        shell.cols = shellClient.cols;
+        shell.rows = shellClient.rows;
+        try { shell.ptyProcess.resize(shellClient.cols, shellClient.rows); } catch (_) {}
       }
       break;
     }
 
     case 'shell_input': {
-      const shellClient = wsToShellClient.get(wsId);
-      if (shellSession?.ptyProcess && shellClient && typeof msg.data === 'string') {
-        try { shellSession.ptyProcess.resize(shellClient.cols || 80, shellClient.rows || 24); } catch (_) {}
-        shellSession.ptyProcess.write(msg.data);
-        shellSession.lastActiveAt = Date.now();
+      const shellBinding = wsToShellClient.get(wsId);
+      const shellClient = shellBinding?.client;
+      const shell = shellBinding && getShell(shellBinding.shellId);
+      if (shell?.ptyProcess && shellClient && typeof msg.data === 'string') {
+        try { shell.ptyProcess.resize(shellClient.cols || 80, shellClient.rows || 24); } catch (_) {}
+        shell.ptyProcess.write(msg.data);
+        shell.lastActiveAt = Date.now();
       }
       break;
     }
 
     case 'shell_kill':
-      destroyShell();
+      destroyShell(msg.shellId || wsToShellClient.get(wsId)?.shellId || '1');
       break;
+
+    case 'shell_ping': {
+      const shellId = normalizeShellId(msg.shellId || wsToShellClient.get(wsId)?.shellId || '1');
+      try {
+        ws.send(JSON.stringify({ type: 'shell_pong', shellId, ts: msg.ts || Date.now() }));
+      } catch (_) {}
+      break;
+    }
 
     case 'start':
       createSession(ws, wsId, msg);
@@ -764,6 +795,12 @@ function handleMessage(ws, wsId, raw) {
 
     case 'list':
       try { if (ws.readyState === 1) ws.send(JSON.stringify({ type: 'session_list', sessions: getSessionList() })); } catch (_) {}
+      break;
+
+    case 'terminal_ping':
+      try {
+        ws.send(JSON.stringify({ type: 'terminal_pong', sessionId: msg.sessionId || entry?.sessionId || '', ts: msg.ts || Date.now() }));
+      } catch (_) {}
       break;
   }
 }
@@ -929,26 +966,31 @@ function renameSessionHttp(sessionId, params = {}) {
   return { ok: true, found: true, name: session.name };
 }
 
-function shellMeta() {
+function shellMeta(shellId = '1') {
+  const id = normalizeShellId(shellId);
+  const shell = getShell(id);
   return {
-    alive: !!shellSession?.ptyProcess,
-    exitCode: shellSession?.exitCode ?? null,
-    cwd: shellSession?.cwd || '',
-    clientCount: shellSession?.clients?.size || 0,
+    shellId: id,
+    alive: !!shell?.ptyProcess,
+    exitCode: shell?.exitCode ?? null,
+    cwd: shell?.cwd || '',
+    clientCount: shell?.clients?.size || 0,
   };
 }
 
-function requireShell() {
-  if (!shellSession) throw apiError(404, 'Shell not found');
-  return shellSession;
+function requireShell(shellId = '1') {
+  const shell = getShell(shellId);
+  if (!shell) throw apiError(404, 'Shell not found');
+  return shell;
 }
 
 function startShellHttp(params = {}) {
+  const shellId = normalizeShellId(params.shellId);
   const { cols, rows } = normalizeSize(params.cols, params.rows);
-  let shell = shellSession;
+  let shell = getShell(shellId);
   if (!shell || !shell.ptyProcess) {
     const memory = makeMemoryWS();
-    shell = spawnSharedShell(memory.ws, { cwd: params.cwd, cols, rows, env: params.env || {} });
+    shell = spawnSharedShell(memory.ws, { shellId, cwd: params.cwd, cols, rows, env: params.env || {} });
     const error = findControlMessage(memory.sent, 'shell_error');
     if (error) throw apiError(400, error.message || 'Failed to start shell');
     if (!shell) throw apiError(500, 'Shell start failed');
@@ -959,13 +1001,13 @@ function startShellHttp(params = {}) {
     try { shell.ptyProcess.resize(cols, rows); } catch (_) {}
   }
   return {
-    ...shellMeta(),
+    ...shellMeta(shellId),
     ...readBufferSince(shell, shell.bufferBase || 0),
   };
 }
 
 function inputShellHttp(params = {}) {
-  const shell = requireShell();
+  const shell = requireShell(params.shellId);
   if (!shell.ptyProcess) throw apiError(409, 'Shell is not running');
   const data = normalizeInput(params.data);
   const { cols, rows } = normalizeSize(params.cols || shell.cols, params.rows || shell.rows);
@@ -978,7 +1020,7 @@ function inputShellHttp(params = {}) {
 }
 
 function resizeShellHttp(params = {}) {
-  const shell = requireShell();
+  const shell = requireShell(params.shellId);
   const { cols, rows } = normalizeSize(params.cols, params.rows);
   shell.cols = cols;
   shell.rows = rows;
@@ -989,12 +1031,13 @@ function resizeShellHttp(params = {}) {
 }
 
 function pollShellHttp(params = {}) {
-  const shell = requireShell();
-  return pollBuffer(shell, params.cursor, params.wait, shellMeta);
+  const shellId = normalizeShellId(params.shellId);
+  const shell = requireShell(shellId);
+  return pollBuffer(shell, params.cursor, params.wait, () => shellMeta(shellId));
 }
 
-function killShellHttp() {
-  destroyShell();
+function killShellHttp(shellId = '1') {
+  destroyShell(shellId);
   return { ok: true };
 }
 
@@ -1058,8 +1101,8 @@ function readLog(sessionId) {
 // ── Cleanup ───────────────────────────────────────────────────────────────────
 
 function cleanup() {
-  if (shellSession?.ptyProcess) {
-    try { shellSession.ptyProcess.kill(); } catch (_) {}
+  for (const [, shell] of shellSessions) {
+    try { if (shell.ptyProcess) shell.ptyProcess.kill(); } catch (_) {}
   }
   for (const [, s] of sessions) {
     try { if (s.ptyProcess) s.ptyProcess.kill(); } catch (_) {}

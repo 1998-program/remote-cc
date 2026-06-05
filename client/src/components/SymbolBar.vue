@@ -177,7 +177,7 @@ function onTouchEnd(sym) {
   min-width: 0;
 }
 
-/* Shell 专用两排容器 */
+/* 终端专用两排容器 */
 .symbol-rows-wrap {
   flex: 1;
   display: flex;

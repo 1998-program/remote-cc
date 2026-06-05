@@ -12,13 +12,16 @@
         <label class="nc-label">Agent</label>
         <div class="nc-agent-picker">
           <button
-            v-for="item in agents"
+            v-for="item in availableAgents"
             :key="item.id"
             :class="['nc-agent', { active: agent === item.id }]"
             @click="setAgent(item.id)"
           >
-            {{ item.name }}
+            {{ item.label || item.name }}
           </button>
+          <span v-if="!availableAgents.length" class="nc-status-inline">
+            {{ agentLoading ? t.agent_checking : t.no_agents_available }}
+          </span>
         </div>
       </div>
 
@@ -60,7 +63,7 @@
 
       <div class="nc-actions">
         <button class="nc-cancel" @click="$emit('cancel')">{{ t.cancel }}</button>
-        <button class="nc-start" @click="start">{{ t.start_btn }} <AppIcon name="play" /></button>
+        <button class="nc-start" :disabled="!canStart" @click="start">{{ t.start_btn }} <AppIcon name="play" /></button>
       </div>
     </div>
 
@@ -69,13 +72,16 @@
       <div class="nc-resume-toolbar">
         <div class="nc-agent-picker">
           <button
-            v-for="item in agents"
+            v-for="item in availableAgents"
             :key="item.id"
             :class="['nc-agent', { active: agent === item.id }]"
             @click="setAgent(item.id)"
           >
-            {{ item.name }}
+            {{ item.label || item.name }}
           </button>
+          <span v-if="!availableAgents.length" class="nc-status-inline">
+            {{ agentLoading ? t.agent_checking : t.no_agents_available }}
+          </span>
         </div>
       </div>
       <div v-if="histLoading" class="nc-status">{{ t.loading_hist }}</div>
@@ -121,7 +127,7 @@
                   @keyup.enter="startResume"
                   @click.stop
                 />
-                <button class="nc-start nc-start-sm" @click.stop="startResume">{{ t.resume }} <AppIcon name="play" /></button>
+                <button class="nc-start nc-start-sm" :disabled="!canStart" @click.stop="startResume">{{ t.resume }} <AppIcon name="play" /></button>
               </div>
             </div>
           </template>
@@ -136,7 +142,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, watch } from 'vue';
+import { ref, reactive, computed, onBeforeUnmount, onMounted, watch } from 'vue';
 import { api } from '../api/index.js';
 import { useI18n } from '../i18n.js';
 import { settings } from '../settings.js';
@@ -145,11 +151,44 @@ import AppIcon from './AppIcon.vue';
 
 const { t } = useI18n();
 const emit = defineEmits(['start', 'cancel']);
-const agents = [
-  { id: 'claude', name: 'Claude Code' },
-  { id: 'codex', name: 'Codex' },
-];
 const agent = ref('claude');
+const agentStatuses = ref([]);
+const agentLoading = ref(true);
+let agentRefreshTimer = null;
+
+const availableAgents = computed(() => agentStatuses.value.filter(item => item.available));
+const canStart = computed(() => availableAgents.value.some(item => item.id === agent.value));
+
+function pickAvailableAgent() {
+  if (canStart.value) return;
+  const preferred = availableAgents.value.find(item => item.default) || availableAgents.value[0];
+  if (preferred) setAgent(preferred.id);
+}
+
+async function refreshAgents() {
+  agentLoading.value = true;
+  try {
+    const list = await api.getAgents();
+    agentStatuses.value = Array.isArray(list) ? list : [];
+    pickAvailableAgent();
+    if (tab.value === 'resume' && canStart.value && !histLoaded && !histLoading.value) {
+      loadHistory();
+    }
+  } catch (_) {
+    agentStatuses.value = [];
+  } finally {
+    agentLoading.value = false;
+  }
+}
+
+onMounted(() => {
+  refreshAgents();
+  agentRefreshTimer = setInterval(refreshAgents, 15000);
+});
+
+onBeforeUnmount(() => {
+  clearInterval(agentRefreshTimer);
+});
 
 // ── Tab state ──────────────────────────────────────────────────────────────────
 const tab = ref('new');
@@ -179,6 +218,7 @@ function shortPath(p) {
 }
 
 function start() {
+  if (!canStart.value) return;
   const dir  = workingDir.value.trim() || '~';
   const base = dir.split('/').filter(Boolean).pop() || 'root';
   const name = sessionName.value.trim() || base;
@@ -228,6 +268,7 @@ function setAgent(nextAgent) {
 }
 
 async function loadHistory() {
+  if (!canStart.value) return;
   if (histLoaded) return;
   histLoading.value = true;
   histError.value = '';
@@ -297,6 +338,7 @@ function selectSess(sess, proj) {
 }
 
 function startResume() {
+  if (!canStart.value) return;
   const sess = selectedSess.value;
   if (!sess) return;
   const dir  = sess.cwd || '~';
@@ -418,7 +460,7 @@ function fmtDate(iso) {
 }
 
 .nc-quickpicks { display: flex; gap: 6px; flex-wrap: wrap; }
-.nc-agent-picker { display: flex; gap: 8px; flex-wrap: wrap; }
+.nc-agent-picker { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .nc-agent {
   background: color-mix(in srgb, var(--panel2) 86%, transparent); border: 1px solid var(--border);
   border-radius: var(--radius-sm); color: var(--muted); font-family: 'JetBrains Mono', ui-monospace, monospace;
@@ -435,6 +477,18 @@ function fmtDate(iso) {
   border-color: var(--border-strong);
   color: var(--neon);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--neon) 14%, transparent);
+}
+.nc-status-inline {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 6px 10px;
+  border: 1px dashed color-mix(in srgb, var(--border) 80%, transparent);
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  background: color-mix(in srgb, var(--panel2) 48%, transparent);
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 11px;
 }
 .nc-pick {
   background: color-mix(in srgb, var(--panel2) 76%, transparent); border: 1px solid var(--border);
@@ -472,6 +526,16 @@ function fmtDate(iso) {
   background: color-mix(in srgb, var(--neon) 18%, transparent);
   box-shadow: 0 0 16px var(--glow);
   transform: translateY(-1px);
+}
+.nc-start:disabled,
+.nc-start:disabled:hover {
+  cursor: not-allowed;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--panel2) 74%, transparent);
+  border-color: var(--border);
+  box-shadow: none;
+  transform: none;
+  opacity: .62;
 }
 .nc-start-sm { font-size: 12px; padding: 7px 14px; }
 

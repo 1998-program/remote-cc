@@ -182,30 +182,50 @@ function terminalHttpRoute(req, res, urlPath, query) {
 }
 
 function shellHttpRoute(req, res, urlPath, query) {
-  if (req.method === 'POST' && urlPath === '/api/shell/start') {
-    withJsonBody(req, res, body => startShellHttp(body));
+  let shellId = '1';
+  let action = '';
+
+  const legacy = urlPath.match(/^\/api\/shell\/(start|input|resize|poll|kill)$/);
+  const named = urlPath.match(/^\/api\/shell\/([^/]+)\/(start|input|resize|poll|kill)$/);
+  if (legacy) {
+    action = legacy[1];
+  } else if (named) {
+    try { shellId = decodeURIComponent(named[1]); }
+    catch (_) {
+      jsonReply(res, 400, { error: 'Bad request' });
+      return true;
+    }
+    action = named[2];
+  } else {
+    return false;
+  }
+
+  if (req.method === 'POST' && action === 'start') {
+    withJsonBody(req, res, body => startShellHttp({ ...(body || {}), shellId }));
     return true;
   }
-  if (req.method === 'POST' && urlPath === '/api/shell/input') {
-    withJsonBody(req, res, body => inputShellHttp(body));
+  if (req.method === 'POST' && action === 'input') {
+    withJsonBody(req, res, body => inputShellHttp({ ...(body || {}), shellId }));
     return true;
   }
-  if (req.method === 'POST' && urlPath === '/api/shell/resize') {
-    withJsonBody(req, res, body => resizeShellHttp(body));
+  if (req.method === 'POST' && action === 'resize') {
+    withJsonBody(req, res, body => resizeShellHttp({ ...(body || {}), shellId }));
     return true;
   }
-  if (req.method === 'POST' && urlPath === '/api/shell/kill') {
-    replyResult(res, killShellHttp);
+  if (req.method === 'POST' && action === 'kill') {
+    replyResult(res, () => killShellHttp(shellId));
     return true;
   }
-  if (req.method === 'GET' && urlPath === '/api/shell/poll') {
+  if (req.method === 'GET' && action === 'poll') {
     replyResult(res, () => pollShellHttp({
+      shellId,
       cursor: query.searchParams.get('cursor'),
       wait: query.searchParams.get('wait'),
     }));
     return true;
   }
-  return false;
+  jsonReply(res, 405, { error: 'Method not allowed' });
+  return true;
 }
 
 function handleProxyDirect(req, res) {

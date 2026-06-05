@@ -57,7 +57,7 @@ Web 端默认使用 WebSocket 获取实时状态并传输终端数据；如果�
 
 - 快捷键栏只在手机端显示，PC 端保留完整终端区域。
 - **CC 模式**（蓝色）：`M`（Shift+Tab）`Esc` `Tab` `/` `!` `↑↓←→` `⏎`
-- **SH 模式**（黄色，行首输入 `!` 自动切换）：两行移动端专用 Shell 面板；第一行 `ESC` `/` `|` `-` `HOME` `↑` `END` `TAB`，第二行 `FN` `CTRL` `ALT` `←` `↓` `→` `~`；点 `CTRL` 后再输入 `x` 即发送 `Ctrl+x`
+- **SH 模式**（黄色，行首输入 `!` 自动切换）：两行移动端专用终端面板；第一行 `ESC` `/` `|` `-` `HOME` `↑` `END` `TAB`，第二行 `FN` `CTRL` `ALT` `←` `↓` `→` `~`；点 `CTRL` 后再输入 `x` 即发送 `Ctrl+x`
 - `Ctrl+]` 在会话内断开回菜单
 
 #### 文件浏览器（右上角文件夹图标）
@@ -70,18 +70,18 @@ Web 端默认使用 WebSocket 获取实时状态并传输终端数据；如果�
 - **复制路径**：鼠标悬停条目，点击复制路径按钮；预览面板顶部也有复制按钮
 - **上传 / 下载**：点击上传按钮或把文件拖到文件浏览器，可上传到当前目录；点击下载按钮下载文件
 
-#### 共享 Shell（右上角终端图标）
+#### 共享终端（右上角终端图标）
 
-终端按钮会打开一个普通 shell PTY。它不进入 Agent 会话列表，但会作为单个前台 Shell 会话保留：关闭页面、断网或刷新不会杀进程，重新打开会回放最近输出；多个 Web 端打开终端图标时会同步同一个 Shell。默认优先使用 `zsh`，其次 `fish`、`bash`、`sh`；可通过 `RCC_SHELL` 或 `REMOTECC_SHELL` 指定。
+终端按钮会打开一个普通 PTY。它不进入 Agent 会话列表，但会作为单个前台终端会话保留：关闭页面、断网或刷新不会杀进程，重新打开会回放最近输出；多个 Web 端打开终端图标时会同步同一个终端。默认优先使用 `zsh`，其次 `fish`、`bash`、`sh`；可通过 `RCC_SHELL` 或 `REMOTECC_SHELL` 指定。
 
-如果 WebSocket 不可用，Shell 会自动切换到 HTTP 长轮询传输，并在断连后继续重试。
+如果 WebSocket 不可用，终端会自动切换到 HTTP 长轮询传输，并在断连后继续重试。
 
 #### 设置页（右上角设置图标）
 
 - **外观**：9 种 UI 风格，深色 12 套 / 浅色 9 套颜色主题，6 种图标风格；默认 Studio + Aurora + Material
 - **终端**：字体（含 MesloLG NF 系列）/字号/行高/光标/回滚行数/符号栏
 - **连接**：重连延迟
-- **远程控制**：文件浏览器默认目录、Shell 默认目录、新建会话默认目录
+- **远程控制**：文件浏览器默认目录、终端默认目录、新建会话默认目录
 - **账户**：查看当前用户、修改 Web 登录密码、退出登录
 - **语言**：中文 / English；设置页、帮助页、说明文案和图标提示会同步切换
 
@@ -146,9 +146,9 @@ rcc-tui
 |---|---|
 | <img src="assets/screenshots/web-home-desktop.jpg" alt="Web 会话列表" width="520"> | <img src="assets/screenshots/web-terminal-desktop.png" alt="Web 终端" width="520"> |
 
-| 文件浏览器 | 共享 Shell |
+| 文件浏览器 | 共享终端 |
 |---|---|
-| <img src="assets/screenshots/web-file-browser-desktop.jpg" alt="Web 文件浏览器" width="520"> | <img src="assets/screenshots/web-shell-desktop.png" alt="Web 共享 Shell" width="520"> |
+| <img src="assets/screenshots/web-file-browser-desktop.jpg" alt="Web 文件浏览器" width="520"> | <img src="assets/screenshots/web-shell-desktop.png" alt="Web 共享终端" width="520"> |
 
 | 外观设置 | 终端与目录设置 |
 |---|---|
@@ -232,7 +232,7 @@ Open `http://<server>:8310` in a browser and log in.
 
 - The shortcut bar is shown only on mobile; desktop keeps the full terminal area.
 - **CC mode** (blue): `M`(Shift+Tab) `Esc` `Tab` `/` `!` `↑↓←→` `⏎`
-- **SH mode** (yellow, auto-switch when `!` is first char): two-row mobile-only Shell panel; row 1 is `ESC` `/` `|` `-` `HOME` `↑` `END` `TAB`, row 2 is `FN` `CTRL` `ALT` `←` `↓` `→` `~`; tap `CTRL`, then type `x` to send `Ctrl+x`
+- **SH mode** (yellow, auto-switch when `!` is first char): two-row mobile-only terminal panel; row 1 is `ESC` `/` `|` `-` `HOME` `↑` `END` `TAB`, row 2 is `FN` `CTRL` `ALT` `←` `↓` `→` `~`; tap `CTRL`, then type `x` to send `Ctrl+x`
 - `Ctrl+]` detaches from session back to menu
 
 #### File Browser (folder icon, top right)
@@ -245,18 +245,18 @@ Click the folder icon to open the file browser, which defaults to the server roo
 - **Copy path**: hover over an entry and click the copy path button; also available in the preview header
 - **Upload / download**: click the upload button or drop files onto the browser to upload into the current directory; click the download button to download files
 
-#### Shared Shell (terminal icon, top right)
+#### Shared Terminal (terminal icon, top right)
 
-The terminal button opens a normal shell PTY. It does not enter the agent session list, but it is kept as one foreground shell session: closing the page, network disconnects, or refreshes do not kill it, reopening replays recent output, and multiple Web clients attach to the same shell. It prefers `zsh`, then `fish`, `bash`, and `sh`; set `RCC_SHELL` or `REMOTECC_SHELL` to override it.
+The terminal button opens a normal PTY. It does not enter the agent session list, but it is kept as one foreground terminal session: closing the page, network disconnects, or refreshes do not kill it, reopening replays recent output, and multiple Web clients attach to the same terminal. It prefers `zsh`, then `fish`, `bash`, and `sh`; set `RCC_SHELL` or `REMOTECC_SHELL` to override it.
 
-If WebSocket is unavailable, Shell automatically switches to HTTP long-polling transport and keeps retrying after disconnects.
+If WebSocket is unavailable, the terminal automatically switches to HTTP long-polling transport and keeps retrying after disconnects.
 
 #### Settings (settings icon, top right)
 
 - **Appearance**: 9 UI styles, 12 dark and 9 light color themes, 6 icon styles; defaults to Studio + Aurora + Material
 - **Terminal**: font (including MesloLG NF family) / size / line-height / cursor / scrollback / symbol bar
 - **Connection**: reconnect delays
-- **Remote control**: file browser default path, shell cwd, new-session default directory
+- **Remote control**: file browser default path, terminal cwd, new-session default directory
 - **Account**: current user, Web login password change, sign out
 - **Language**: 中文 / English; settings, help, descriptions, and icon tooltips switch together
 
@@ -323,9 +323,9 @@ Displays a large-text banner and session list on launch. `rcc-tui` reads `~/.rcc
 |---|---|
 | <img src="assets/screenshots/web-home-desktop.jpg" alt="Web sessions" width="520"> | <img src="assets/screenshots/web-terminal-desktop.png" alt="Web terminal" width="520"> |
 
-| File browser | Shared Shell |
+| File browser | Shared terminal |
 |---|---|
-| <img src="assets/screenshots/web-file-browser-desktop.jpg" alt="Web file browser" width="520"> | <img src="assets/screenshots/web-shell-desktop.png" alt="Web shared shell" width="520"> |
+| <img src="assets/screenshots/web-file-browser-desktop.jpg" alt="Web file browser" width="520"> | <img src="assets/screenshots/web-shell-desktop.png" alt="Web shared terminal" width="520"> |
 
 | Appearance settings | Terminal and path settings |
 |---|---|
@@ -360,9 +360,9 @@ Displays a large-text banner and session list on launch. `rcc-tui` reads `~/.rcc
 
 ### 2026-06-04
 
-**共享 Shell**：Web Shell 改为单个前台共享会话，支持断线重连、历史回放和多端同步。
+**共享终端**：Web 终端改为单个前台共享会话，支持断线重连、历史回放和多端同步。
 
-**移动端终端**：修复手机端无法输入的问题，并支持上滑查看历史、文本选择复制、默认 MesloLGM NF 字体和 Shell 专用 `CTRL` / `ALT` / `FN` 快捷键。
+**移动端终端**：修复手机端无法输入的问题，并支持上滑查看历史、文本选择复制、默认 MesloLGM NF 字体和终端专用 `CTRL` / `ALT` / `FN` 快捷键。
 
 **设置页优化**：移动端 UI 风格预览改为整宽卡片，避免预览图被窄列压扁。
 
@@ -376,7 +376,7 @@ Displays a large-text banner and session list on launch. `rcc-tui` reads `~/.rcc
 
 **文件浏览器**：默认从 `/` 打开，支持新建文件夹、点击/拖拽上传到当前目录和下载文件。
 
-**共享 Shell**：Web 顶栏通用终端入口改为单个前台共享 Shell，会话断开后仍保留，重新打开会回放最近输出。
+**共享终端**：Web 顶栏通用终端入口改为单个前台共享终端，会话断开后仍保留，重新打开会回放最近输出。
 
 **图标与主题**：Web 顶栏、文件管理器、设置页和操作按钮使用统一 SVG 图标系统；默认 Material 风格，支持 6 种图标风格、9 种 UI 风格、深色 12 套 / 浅色 9 套配色。
 
@@ -394,7 +394,7 @@ Displays a large-text banner and session list on launch. `rcc-tui` reads `~/.rcc
 
 **移动端终端**：优化 xterm 异步写入后的自动锁底和用户滚动识别，减少 Codex 输出底部留白。
 
-**Shell 快捷键**：移动端 Shell 面板改为两行布局，支持 `CTRL` / `ALT` / `FN` 一次性修饰键，适配 zsh/fish/bash/tmux 常用操作。
+**终端快捷键**：移动端终端面板改为两行布局，支持 `CTRL` / `ALT` / `FN` 一次性修饰键，适配 zsh/fish/bash/tmux 常用操作。
 
 **终端字体**：默认使用 MesloLGM NF，并内置 MesloLGS NF / MesloLGM NF / MesloLGL NF Web 字体，手机端也能渲染 Nerd Font 图标。
 

@@ -103,6 +103,11 @@ function pollTimeout(wait) {
   return Math.max(10000, safeWait + 5000);
 }
 
+function shellBase(shellId = '1') {
+  const id = String(shellId || '1');
+  return id === '1' ? '/api/shell' : `/api/shell/${encodeURIComponent(id)}`;
+}
+
 async function uploadFile(path, file) {
   const res = await fetch(BASE + `/api/fs/upload?path=${encodeURIComponent(path)}`, {
     method: 'POST',
@@ -130,6 +135,7 @@ export const api = {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ settings }),
   }),
+  getAgents:          () => apiFetch('/api/agents'),
   getProjects:        (agent = 'claude') => apiFetch(`/api/projects?agent=${encodeURIComponent(agent)}`),
   getSessions:        (projectId, agent = 'claude') => apiFetch(`/api/sessions/${encodeURIComponent(projectId)}?agent=${encodeURIComponent(agent)}`),
   getSession:         (sessionId, agent = 'claude') => apiFetch(`/api/session/${encodeURIComponent(sessionId)}?agent=${encodeURIComponent(agent)}`),
@@ -169,24 +175,24 @@ export const api = {
     ),
   },
   shell: {
-    start:  (payload) => apiFetch('/api/shell/start', {
+    start:  (payload, shellId = '1') => apiFetch(`${shellBase(shellId)}/start`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload || {}),
     }),
-    input:  (payload) => apiFetch('/api/shell/input', {
+    input:  (payload, shellId = '1') => apiFetch(`${shellBase(shellId)}/input`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload || {}),
     }),
-    resize: (payload) => apiFetch('/api/shell/resize', {
+    resize: (payload, shellId = '1') => apiFetch(`${shellBase(shellId)}/resize`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload || {}),
     }),
-    kill:   () => apiFetch('/api/shell/kill', { method: 'POST' }),
-    poll:   (cursor = 0, wait = 5000) => apiFetch(
-      `/api/shell/poll?cursor=${encodeURIComponent(cursor)}&wait=${encodeURIComponent(wait)}`,
+    kill:   (shellId = '1') => apiFetch(`${shellBase(shellId)}/kill`, { method: 'POST' }),
+    poll:   (cursor = 0, wait = 5000, shellId = '1') => apiFetch(
+      `${shellBase(shellId)}/poll?cursor=${encodeURIComponent(cursor)}&wait=${encodeURIComponent(wait)}`,
       { timeoutMs: pollTimeout(wait) },
     ),
   },

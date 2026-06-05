@@ -1,5 +1,9 @@
 <template>
   <div class="sh-root">
+    <div v-if="statusVisible" class="sh-status" :class="`is-${status}`">
+      <span class="sh-status-dot"></span>
+      <span>{{ statusLabel }}</span>
+    </div>
     <Terminal
       ref="terminalRef"
       class="sh-terminal"
@@ -13,29 +17,93 @@
 </template>
 
 <script setup>
-import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import Terminal from './Terminal.vue';
 import { api, createWS } from '../api/index.js';
+import { useI18n } from '../i18n.js';
 
+const { t } = useI18n();
 const props = defineProps({
   theme: { type: String, default: 'cyber' },
   initialCwd: { type: String, default: '/' },
+  shellId: { type: String, default: '1' },
 });
 const terminalRef = ref(null);
 const status = ref('connecting');
 const cwd = ref(props.initialCwd || '/');
+const transport = ref('ws');
+const connectedBadgeVisible = ref(false);
 let ws = null;
 let closing = false;
 let wsRun = 0;
 let readyTimer = null;
 let fallbackTimer = null;
+let heartbeatTimer = null;
+let heartbeatTimeout = null;
 let httpRun = 0;
+let connectedBadgeTimer = null;
 const WS_FALLBACK_DELAY = 3000;
+const WS_HEARTBEAT_INTERVAL = 25000;
+const WS_HEARTBEAT_TIMEOUT = 8000;
 const HTTP_POLL_WAIT = 5000;
+let hasConnected = false;
+let reconnectNoticePending = false;
+
+const statusLabel = computed(() => {
+  if (status.value === 'connected') return `${t.value.shell_status_connected} · ${transport.value.toUpperCase()}`;
+  if (status.value === 'connecting') return t.value.shell_status_reconnecting;
+  if (status.value === 'closed') return t.value.shell_status_closed;
+  if (status.value === 'error') return t.value.shell_status_error;
+  return status.value;
+});
+const statusVisible = computed(() => status.value !== 'connected' || connectedBadgeVisible.value);
 
 function clearTimers() {
   clearTimeout(readyTimer);
   clearTimeout(fallbackTimer);
+  clearInterval(heartbeatTimer);
+  clearTimeout(heartbeatTimeout);
+  clearTimeout(connectedBadgeTimer);
+  heartbeatTimer = null;
+  heartbeatTimeout = null;
+  connectedBadgeTimer = null;
+}
+
+function markHeartbeatAlive() {
+  clearTimeout(heartbeatTimeout);
+  heartbeatTimeout = null;
+}
+
+function refreshTerminalView() {
+  nextTick(() => {
+    terminalRef.value?.fit?.();
+    terminalRef.value?.scrollToBottom?.();
+  });
+}
+
+function markDisconnected() {
+  if (hasConnected) reconnectNoticePending = true;
+  connectedBadgeVisible.value = false;
+  clearTimeout(connectedBadgeTimer);
+  connectedBadgeTimer = null;
+}
+
+function markConnected(nextTransport, { refresh = true } = {}) {
+  const shouldShowBadge = !hasConnected || reconnectNoticePending || status.value !== 'connected' || transport.value !== nextTransport;
+  const shouldRefresh = refresh || reconnectNoticePending;
+  transport.value = nextTransport;
+  status.value = 'connected';
+  hasConnected = true;
+  reconnectNoticePending = false;
+  if (shouldShowBadge) {
+    connectedBadgeVisible.value = true;
+    clearTimeout(connectedBadgeTimer);
+    connectedBadgeTimer = setTimeout(() => {
+      connectedBadgeVisible.value = false;
+      connectedBadgeTimer = null;
+    }, 3000);
+  }
+  if (shouldRefresh) refreshTerminalView();
 }
 
 function start() {
@@ -43,18 +111,43 @@ function start() {
   cleanup(false);
   closing = false;
   status.value = 'connecting';
+  transport.value = 'ws';
   const socket = createWS();
   ws = socket;
 
-  function switchToHttpFallback(message) {
-    if (run !== wsRun || closing || status.value === 'connected') return;
+  function forceHttpReconnect(message) {
+    if (run !== wsRun || closing) return;
+    markDisconnected();
     wsRun++;
+    clearTimers();
     try { socket.close(); } catch (_) {}
-    if (message) terminalRef.value?.write(message);
     startHttp();
   }
 
+  function switchToHttpFallback(message) {
+    if (run !== wsRun || closing || status.value === 'connected') return;
+    forceHttpReconnect(message);
+  }
+
   fallbackTimer = setTimeout(switchToHttpFallback, WS_FALLBACK_DELAY);
+
+  function startHeartbeat() {
+    clearInterval(heartbeatTimer);
+    clearTimeout(heartbeatTimeout);
+    heartbeatTimer = setInterval(() => {
+      if (run !== wsRun || closing || socket.readyState !== WebSocket.OPEN) return;
+      try {
+        socket.send(JSON.stringify({ type: 'shell_ping', shellId: props.shellId, ts: Date.now() }));
+      } catch (_) {
+        forceHttpReconnect();
+        return;
+      }
+      clearTimeout(heartbeatTimeout);
+      heartbeatTimeout = setTimeout(() => {
+        forceHttpReconnect();
+      }, WS_HEARTBEAT_TIMEOUT);
+    }, WS_HEARTBEAT_INTERVAL);
+  }
 
   socket.onopen = () => {
     if (run !== wsRun) return;
@@ -64,6 +157,7 @@ function start() {
       terminalRef.value?.fit();
       socket.send(JSON.stringify({
         type: 'shell_start',
+        shellId: props.shellId,
         cwd: cwd.value || '/',
         cols: terminalRef.value?.getCols?.() ?? 80,
         rows: terminalRef.value?.getRows?.() ?? 24,
@@ -71,7 +165,7 @@ function start() {
       readyTimer = setTimeout(() => {
         if (run !== wsRun || status.value !== 'connecting') return;
         status.value = 'error';
-        switchToHttpFallback('\r\n\x1b[31m[shell not ready; switching to HTTP fallback]\x1b[0m\r\n');
+        switchToHttpFallback();
       }, 3000);
     });
   };
@@ -89,25 +183,29 @@ function start() {
       }
       if (msg.type === 'shell_replay_end') {
         terminalRef.value?.fit?.();
-        nextTick(() => terminalRef.value?.scrollToBottom?.());
+        refreshTerminalView();
         return;
       }
       if (msg.type === 'shell_ready') {
         clearTimeout(readyTimer);
-        status.value = 'connected';
         cwd.value = msg.cwd || cwd.value;
+        markConnected('ws');
+        markHeartbeatAlive();
+        startHeartbeat();
+        return;
+      }
+      if (msg.type === 'shell_pong') {
+        markHeartbeatAlive();
         return;
       }
       if (msg.type === 'shell_error') {
         clearTimeout(readyTimer);
         status.value = 'error';
-        terminalRef.value?.write(`\r\n\x1b[31m[shell error: ${msg.message}]\x1b[0m\r\n`);
         return;
       }
       if (msg.type === 'shell_exit') {
         clearTimeout(readyTimer);
         status.value = 'closed';
-        terminalRef.value?.write(`\r\n\x1b[33m[shell exited]\x1b[0m\r\n`);
         return;
       }
     } catch (_) {}
@@ -117,8 +215,8 @@ function start() {
   socket.onclose = () => {
     clearTimers();
     if (run !== wsRun || closing) return;
+    markDisconnected();
     status.value = 'closed';
-    terminalRef.value?.write('\r\n\x1b[33m[shell disconnected; reconnecting]\x1b[0m\r\n');
     setTimeout(() => {
       if (run !== wsRun || closing) return;
       startHttp();
@@ -132,10 +230,10 @@ function cleanup(kill = true) {
   clearTimers();
   httpRun++;
   if (ws && ws.readyState === WebSocket.OPEN && kill) {
-    try { ws.send(JSON.stringify({ type: 'shell_kill' })); } catch (_) {}
+    try { ws.send(JSON.stringify({ type: 'shell_kill', shellId: props.shellId })); } catch (_) {}
   }
   if ((!ws || ws.readyState !== WebSocket.OPEN) && kill) {
-    api.shell.kill().catch(() => {});
+    api.shell.kill(props.shellId).catch(() => {});
   }
   try { ws?.close(); } catch (_) {}
   ws = null;
@@ -143,13 +241,13 @@ function cleanup(kill = true) {
 
 function sendInput(data) {
   if (ws?.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify({ type: 'shell_input', data }));
+    ws.send(JSON.stringify({ type: 'shell_input', shellId: props.shellId, data }));
   } else if (status.value === 'connected' || status.value === 'connecting') {
     api.shell.input({
       data,
       cols: terminalRef.value?.getCols?.() ?? 80,
       rows: terminalRef.value?.getRows?.() ?? 24,
-    }).catch(() => {});
+    }, props.shellId).catch(() => {});
   }
 }
 
@@ -160,9 +258,9 @@ function onInput(data) {
 
 function onResize({ cols, rows }) {
   if (ws?.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify({ type: 'shell_resize', cols, rows }));
+    ws.send(JSON.stringify({ type: 'shell_resize', shellId: props.shellId, cols, rows }));
   } else if (status.value === 'connected' || status.value === 'connecting') {
-    api.shell.resize({ cols, rows }).catch(() => {});
+    api.shell.resize({ cols, rows }, props.shellId).catch(() => {});
   }
 }
 
@@ -173,12 +271,16 @@ function onPaste(text) {
 function applyHttpSnapshot(snapshot, clearFirst = false) {
   if (!snapshot) return;
   clearTimeout(readyTimer);
-  status.value = snapshot.alive === false ? 'closed' : 'connected';
   cwd.value = snapshot.cwd || cwd.value;
+  const shouldRefresh = Boolean(clearFirst || snapshot.reset || snapshot.output || reconnectNoticePending);
   if (clearFirst || snapshot.reset) terminalRef.value?.clear?.();
   if (snapshot.output) terminalRef.value?.write?.(snapshot.output);
-  if (snapshot.output) nextTick(() => terminalRef.value?.scrollToBottom?.());
-  if (snapshot.alive === false) terminalRef.value?.write('\r\n\x1b[33m[shell exited]\x1b[0m\r\n');
+  if (snapshot.alive === false) {
+    status.value = 'closed';
+    refreshTerminalView();
+    return;
+  }
+  markConnected('http', { refresh: shouldRefresh });
 }
 
 async function startHttp() {
@@ -188,6 +290,7 @@ async function startHttp() {
   ws = null;
   closing = false;
   status.value = 'connecting';
+  transport.value = 'http';
 
   try {
     await nextTick();
@@ -196,14 +299,13 @@ async function startHttp() {
       cwd: cwd.value || '/',
       cols: terminalRef.value?.getCols?.() ?? 80,
       rows: terminalRef.value?.getRows?.() ?? 24,
-    });
+    }, props.shellId);
     if (run !== httpRun || closing) return;
     applyHttpSnapshot(snapshot, true);
     pollHttp(run, snapshot.cursor ?? 0);
   } catch (e) {
     if (run !== httpRun || closing) return;
     status.value = 'error';
-    terminalRef.value?.write(`\r\n\x1b[31m[shell error: ${e.message}]\x1b[0m\r\n`);
     setTimeout(() => {
       if (run === httpRun && !closing) startHttp();
     }, 2000);
@@ -214,7 +316,7 @@ async function pollHttp(run, cursor) {
   let retryDelay = 1000;
   while (run === httpRun && !closing) {
     try {
-      const result = await api.shell.poll(cursor, HTTP_POLL_WAIT);
+      const result = await api.shell.poll(cursor, HTTP_POLL_WAIT, props.shellId);
       if (run !== httpRun || closing) return;
       retryDelay = 1000;
       applyHttpSnapshot(result, false);
@@ -222,10 +324,12 @@ async function pollHttp(run, cursor) {
       if (result.alive === false) return;
     } catch (_) {
       if (run !== httpRun || closing) return;
+      markDisconnected();
       status.value = 'connecting';
-      terminalRef.value?.write(`\r\n\x1b[33m[shell disconnected; retrying ${(retryDelay/1000).toFixed(1)}s]\x1b[0m\r\n`);
       await new Promise(resolve => setTimeout(resolve, retryDelay));
-      retryDelay = Math.min(retryDelay * 1.5, 15000);
+      if (run !== httpRun || closing) return;
+      startHttp();
+      return;
     }
   }
 }
@@ -236,11 +340,54 @@ onBeforeUnmount(() => cleanup(false));
 
 <style scoped>
 .sh-root {
+  position: relative;
   flex: 1; min-height: 0;
   display: flex; flex-direction: column;
   background: transparent;
 }
 .sh-terminal {
   flex: 1; min-height: 0;
+}
+.sh-status {
+  position: absolute;
+  z-index: 4;
+  top: 8px;
+  right: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: min(220px, calc(100% - 20px));
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--panel) 84%, transparent);
+  color: var(--muted);
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+  pointer-events: none;
+  box-shadow: 0 8px 20px color-mix(in srgb, #000 20%, transparent);
+}
+.sh-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 8px currentColor;
+  flex-shrink: 0;
+}
+.sh-status.is-connected {
+  color: var(--success);
+  border-color: color-mix(in srgb, var(--success) 36%, var(--border));
+}
+.sh-status.is-connecting {
+  color: var(--warning);
+  border-color: color-mix(in srgb, var(--warning) 36%, var(--border));
+}
+.sh-status.is-closed,
+.sh-status.is-error {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 36%, var(--border));
 }
 </style>
