@@ -109,6 +109,14 @@ function resolveAgentBin(agentId) {
     };
   }
 
+  if (cfg.id === 'codex' && !IS_WIN && executableExists(BAIDU_CX_CODEX_BIN)) {
+    return {
+      command: BAIDU_CX_CODEX_BIN,
+      available: true,
+      source: 'known-path',
+    };
+  }
+
   const fromEnv = process.env[cfg.envVar];
   if (fromEnv) {
     return {
