@@ -175,6 +175,7 @@ watch(() => props.initialPath, path => {
 .dp-root {
   border: 1px solid var(--border);
   border-radius: var(--radius);
+  background: var(--panel);
   background: color-mix(in srgb, var(--panel) 90%, transparent);
   overflow: hidden;
   box-shadow: var(--shadow), 0 0 20px color-mix(in srgb, var(--glow) 60%, transparent);
@@ -182,6 +183,7 @@ watch(() => props.initialPath, path => {
 .dp-toolbar {
   display: flex; align-items: center; gap: 7px;
   padding: 8px;
+  background: var(--panel2);
   background: color-mix(in srgb, var(--panel2) 76%, transparent);
   border-bottom: 1px solid var(--hairline);
   flex-wrap: wrap;

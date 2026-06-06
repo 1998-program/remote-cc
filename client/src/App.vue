@@ -1811,6 +1811,36 @@ html[data-light] .cl-status.dead { background: var(--muted); box-shadow: none; }
   .ctx-item:hover {
     background: var(--panel2) !important;
   }
+  .ctx-menu,
+  .sym-popup,
+  .cl-confirm-box,
+  .kc-box,
+  .help-sidebar,
+  .help-md pre,
+  .help-md img,
+  .fb-toolbar,
+  .fb-preview-header,
+  .fb-line-nums,
+  .fb-toast,
+  .fb-drag-overlay,
+  .dp-root,
+  .dp-toolbar {
+    background: var(--panel) !important;
+  }
+  .fb-preview-panel,
+  .fb-preview-img {
+    background: var(--bg) !important;
+  }
+  .sym-popup-overlay,
+  .cl-confirm-overlay,
+  .kc-overlay,
+  .help-scrim,
+  .fb-fs-overlay {
+    background: var(--overlay) !important;
+  }
+  .fb-fs-box {
+    background: var(--bg) !important;
+  }
   ::selection {
     background: var(--border-strong);
   }
@@ -2158,10 +2188,12 @@ select:focus-visible {
 /* Kill confirm — global (Teleport to body) */
 .kc-overlay {
   position: fixed; inset: 0; z-index: 9000;
+  background-color: var(--overlay);
   background: var(--overlay); backdrop-filter: blur(4px);
   display: flex; align-items: center; justify-content: center;
 }
 .kc-box {
+  background-color: var(--panel);
   background: var(--panel); border: 1px solid var(--border);
   border-radius: var(--radius); padding: 24px 28px;
   width: min(340px, 88vw);

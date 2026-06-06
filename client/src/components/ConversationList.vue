@@ -364,10 +364,12 @@ function timeAgo(ts) {
 /* ── Confirm overlay ───────────────────────── */
 .cl-confirm-overlay {
   position: fixed; inset: 0; z-index: 300;
+  background-color: var(--overlay);
   background: var(--overlay); backdrop-filter: blur(4px);
   display: flex; align-items: center; justify-content: center;
 }
 .cl-confirm-box {
+  background-color: var(--panel);
   background: var(--panel); border: 1px solid var(--border);
   border-radius: var(--radius); padding: 24px 28px;
   width: min(340px, 88vw);

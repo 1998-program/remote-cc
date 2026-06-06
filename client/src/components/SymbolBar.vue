@@ -39,8 +39,14 @@
     </div>
 
     <Teleport to="body">
-      <div v-if="popup.show" class="sym-popup-overlay" @click="popup.show = false">
-        <div class="sym-popup" @click.stop>
+      <div
+        v-if="popup.show"
+        class="sym-popup-overlay"
+        @click="popup.show = false"
+        @contextmenu.prevent="popup.show = false"
+        @touchmove.prevent
+      >
+        <div class="sym-popup" @click.stop @touchstart.stop @touchend.stop @contextmenu.prevent>
           <button v-for="v in popup.variants" :key="v.label"
             class="sym-btn sym-btn--variant"
             @click="emit('input', v.value); popup.show = false"
@@ -339,8 +345,15 @@ function onTouchEnd(sym) {
   position: fixed; inset: 0; z-index: 9999;
   display: flex; align-items: flex-end; justify-content: center;
   padding-bottom: env(safe-area-inset-bottom, 60px);
+  background-color: var(--overlay);
+  background: var(--overlay);
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  touch-action: none;
 }
 .sym-popup {
+  background-color: var(--panel);
   background: var(--panel); border: 1px solid var(--border);
   border-radius: var(--radius); display: flex; gap: 6px; padding: 10px;
   box-shadow: var(--shadow), 0 0 30px var(--glow);

@@ -520,7 +520,8 @@ watch(() => props.initialPath, (newPath) => {
 /* ── 工具栏 ─────────────────────────────────────── */
 .fb-toolbar {
   display: flex; align-items: center; gap: 8px;
-  padding: 8px 12px; background: color-mix(in srgb, var(--panel) 82%, transparent);
+  padding: 8px 12px; background: var(--panel);
+  background: color-mix(in srgb, var(--panel) 82%, transparent);
   border-bottom: 1px solid var(--hairline); flex-shrink: 0;
   min-height: 40px; flex-wrap: wrap;
   box-shadow: inset 0 -1px 0 color-mix(in srgb, #ffffff 4%, transparent);
@@ -699,6 +700,7 @@ watch(() => props.initialPath, (newPath) => {
 .fb-preview-panel {
   flex: 1; min-width: 0; display: flex; flex-direction: column;
   overflow: hidden;
+  background: var(--bg);
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--panel) 24%, transparent), transparent 110px),
     color-mix(in srgb, var(--bg) 94%, #00000008);
@@ -714,7 +716,8 @@ watch(() => props.initialPath, (newPath) => {
 
 .fb-preview-header {
   display: flex; align-items: center; gap: 8px;
-  padding: 8px 12px; background: color-mix(in srgb, var(--panel) 84%, transparent);
+  padding: 8px 12px; background: var(--panel);
+  background: color-mix(in srgb, var(--panel) 84%, transparent);
   border-bottom: 1px solid var(--hairline); flex-shrink: 0;
   font-size: 11px; min-height: 34px; flex-wrap: wrap;
 }
@@ -762,6 +765,7 @@ watch(() => props.initialPath, (newPath) => {
   padding: 14px 10px 14px 14px;
   text-align: right; user-select: none;
   border-right: 1px solid var(--hairline);
+  background: var(--panel);
   background: color-mix(in srgb, var(--panel) 78%, transparent); flex-shrink: 0;
 }
 .fb-line-nums span {
@@ -779,7 +783,8 @@ watch(() => props.initialPath, (newPath) => {
 .fb-preview-img {
   flex: 1; overflow: auto;
   display: flex; align-items: flex-start; justify-content: center;
-  padding: 20px; background: color-mix(in srgb, var(--bg) 74%, #00000010);
+  padding: 20px; background: var(--bg);
+  background: color-mix(in srgb, var(--bg) 74%, #00000010);
 }
 .fb-preview-img img {
   max-width: 100%; object-fit: contain;
@@ -807,11 +812,13 @@ watch(() => props.initialPath, (newPath) => {
 /* ── 全屏预览 ─────────────────────────────────────── */
 .fb-fs-overlay {
   position: fixed; inset: 0; z-index: 9999;
+  background-color: var(--overlay);
   background: var(--overlay);
   display: flex; align-items: stretch;
 }
 .fb-fs-box {
   flex: 1; display: flex; flex-direction: column;
+  background-color: var(--bg);
   background: var(--bg); overflow: hidden;
 }
 .fb-fs-header {
@@ -834,6 +841,7 @@ watch(() => props.initialPath, (newPath) => {
 /* ── Toast ───────────────────────────────────────── */
 .fb-toast {
   position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+  background: var(--panel);
   background: color-mix(in srgb, var(--panel) 92%, transparent); border: 1px solid var(--border-strong);
   color: var(--text); font-size: 11px; padding: 6px 16px;
   border-radius: 999px; pointer-events: none;
@@ -851,6 +859,7 @@ watch(() => props.initialPath, (newPath) => {
   display: flex; align-items: center; justify-content: center; gap: 10px;
   border: 1px dashed color-mix(in srgb, var(--neon) 70%, transparent);
   border-radius: var(--radius);
+  background: var(--panel);
   background: color-mix(in srgb, var(--panel) 86%, transparent);
   color: var(--neon);
   font-family: 'JetBrains Mono', monospace;

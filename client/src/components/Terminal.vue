@@ -25,7 +25,13 @@
       @paste="onMobilePaste"
     ></textarea>
 
-    <div v-if="mobileCopyMode" class="mobile-copy-layer" @click.stop>
+    <div
+      v-if="mobileCopyMode"
+      class="mobile-copy-layer"
+      :style="mobileCopyLayerStyle"
+      @click.stop
+      @contextmenu.stop
+    >
       <div class="mobile-copy-toolbar">
         <button
           class="mobile-copy-action"
@@ -44,14 +50,14 @@
           <AppIcon name="close" />
         </button>
       </div>
-      <textarea
+      <pre
         ref="mobileCopyTextRef"
         class="mobile-copy-text"
-        :value="mobileCopyText"
-        readonly
-        spellcheck="false"
+        :style="mobileCopyTextStyle"
+        tabindex="0"
         @click.stop
-      ></textarea>
+        @contextmenu.stop
+      >{{ mobileCopyText }}</pre>
     </div>
 
     <button
@@ -115,7 +121,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, onBeforeUnmount, watch, nextTick } from 'vue';
+import { computed, ref, reactive, onMounted, onBeforeUnmount, watch, nextTick } from 'vue';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
@@ -143,6 +149,23 @@ const terminalSelection = ref('');
 const mobileCopyMode = ref(false);
 const mobileCopyText = ref('');
 const mobileModifier = ref('');
+const mobileCopyColors = computed(() => {
+  const theme = THEMES[props.theme] || THEMES.cyber;
+  return {
+    bg: theme.term?.background || theme.bg || '#07111C',
+    fg: theme.term?.foreground || '#E6F6FF',
+  };
+});
+const mobileCopyLayerStyle = computed(() => ({
+  background: mobileCopyColors.value.bg,
+  backgroundColor: mobileCopyColors.value.bg,
+  color: mobileCopyColors.value.fg,
+}));
+const mobileCopyTextStyle = computed(() => ({
+  background: mobileCopyColors.value.bg,
+  backgroundColor: mobileCopyColors.value.bg,
+  color: mobileCopyColors.value.fg,
+}));
 
 // ── 图片/文件上传 ─────────────────────────────────────────────────────────────
 const uploading = ref(false);
@@ -152,6 +175,7 @@ const lastUploadPath = ref('');
 // 始终把焦点还给 xterm 的内部 textarea
 function focusTerm(e) {
   if (mobileCopyMode.value) return;
+  if (ctxMenu.show || Date.now() < suppressTerminalFocusUntil) return;
   if (e?.target?.closest?.('.mobile-copy-layer, .mobile-selection-copy, .ctx-menu')) return;
   if (isMobileViewport() && term?.getSelection?.()) return;
   if (isMobileViewport() && focusMobileInput()) return;
@@ -246,6 +270,7 @@ let touchStartPoint = null;
 let touchMoved = false;
 let copyModeOpenedNearBottom = true;
 let mobileInputComposing = false;
+let suppressTerminalFocusUntil = 0;
 
 // ── 自动锁底 + 上划暂停更新 ──────────────────────────────────────────────────
 let userScrolled = false;       // 用户是否主动上划
@@ -673,6 +698,8 @@ function openMobileCopyMode() {
   if (!isMobileViewport()) return;
   clearLongPressTimer();
   ctxMenu.show = false;
+  suppressTerminalFocusUntil = Date.now() + 1200;
+  blurTerminalInputs();
   copyModeOpenedNearBottom = isNearBottom();
   userScrolled = true;
   mobileCopyText.value = getTerminalBufferText();
@@ -680,28 +707,46 @@ function openMobileCopyMode() {
   nextTick(() => {
     const el = mobileCopyTextRef.value;
     if (!el) return;
-    try { el.focus({ preventScroll: true }); } catch (_) { el.focus(); }
     el.scrollTop = Math.max(0, el.scrollHeight - el.clientHeight);
   });
+}
+
+function blurTerminalInputs() {
+  mobileInputRef.value?.blur?.();
+  termRef.value?.querySelector('.xterm-helper-textarea')?.blur?.();
+  const active = document.activeElement;
+  if (active?.blur && wrapRef.value?.contains(active)) active.blur();
 }
 
 function closeMobileCopyMode() {
   mobileCopyMode.value = false;
   mobileCopyText.value = '';
+  suppressTerminalFocusUntil = Date.now() + 800;
   if (copyModeOpenedNearBottom) {
     userScrolled = false;
     flushPending();
     scrollToBottomSoon();
   }
-  nextTick(() => focusTerm());
+  nextTick(() => blurTerminalInputs());
 }
 
 function copyMobileText() {
   const el = mobileCopyTextRef.value;
-  const start = el?.selectionStart ?? 0;
-  const end = el?.selectionEnd ?? 0;
-  const selected = el && end > start ? el.value.slice(start, end) : '';
+  const selected = getSelectedMobileCopyText(el);
   copyText(selected || mobileCopyText.value);
+}
+
+function getSelectedMobileCopyText(el) {
+  if (!el) return '';
+  const selection = window.getSelection?.();
+  if (!selection || selection.rangeCount === 0) return '';
+  const selected = selection.toString();
+  if (!selected) return '';
+  const nodeInside = node => {
+    const target = node?.nodeType === 1 ? node : node?.parentNode;
+    return !!target && el.contains(target);
+  };
+  return nodeInside(selection.anchorNode) || nodeInside(selection.focusNode) ? selected : '';
 }
 
 function copyTerminalSelection() {
@@ -726,7 +771,11 @@ function onTermTouchStart(e) {
   touchMoved = false;
   clearTimeout(longPressTimer);
   longPressTimer = setTimeout(() => {
-    if (!touchMoved) openContextMenuAt(touch.clientX, touch.clientY);
+    if (!touchMoved) {
+      suppressTerminalFocusUntil = Date.now() + 1200;
+      blurTerminalInputs();
+      openContextMenuAt(touch.clientX, touch.clientY);
+    }
   }, 650);
 }
 
@@ -780,6 +829,10 @@ function onNativePaste(e) {
 function onContextMenu(e) {
   e.preventDefault();
   clearLongPressTimer();
+  if (isMobileViewport()) {
+    suppressTerminalFocusUntil = Date.now() + 1200;
+    blurTerminalInputs();
+  }
   openContextMenuAt(e.clientX, e.clientY);
 }
 function openContextMenuAt(x, y) {
@@ -887,6 +940,9 @@ function ctxClear()     { ctxMenu.show = false; term?.clear(); }
   z-index: 8;
   display: flex;
   flex-direction: column;
+  box-sizing: border-box;
+  color: var(--text);
+  background-color: var(--bg);
   background: var(--bg);
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--panel) 94%, transparent), color-mix(in srgb, var(--bg) 96%, transparent)),
@@ -902,6 +958,7 @@ function ctxClear()     { ctxMenu.show = false; term?.clear(); }
   gap: 8px;
   padding: 8px;
   border-bottom: 1px solid var(--hairline);
+  background-color: var(--panel);
   background: var(--panel);
   background: color-mix(in srgb, var(--panel) 92%, transparent);
 }
@@ -916,6 +973,7 @@ function ctxClear()     { ctxMenu.show = false; term?.clear(); }
   border: 1px solid var(--border);
   border-color: color-mix(in srgb, var(--neon) 24%, transparent);
   border-radius: var(--radius-sm);
+  background-color: var(--panel2);
   background: var(--panel2);
   background: color-mix(in srgb, var(--panel2) 88%, transparent);
   color: var(--text);
@@ -935,22 +993,28 @@ function ctxClear()     { ctxMenu.show = false; term?.clear(); }
   flex: 1 1 auto;
   min-height: 0;
   width: 100%;
+  box-sizing: border-box;
+  display: block;
+  margin: 0;
   border: 0;
   outline: 0;
   resize: none;
   padding: 10px;
-  color: var(--text);
-  background: transparent;
+  color: inherit;
+  background-color: var(--bg);
+  background: var(--bg);
   font-family: 'RemoteCC MesloLGM NF', 'MesloLGM NF', 'RemoteCC MesloLGL NF', 'MesloLGL NF', 'JetBrains Mono', monospace;
   font-size: 12px;
   line-height: 1.55;
-  white-space: pre;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
   overflow: auto;
   -webkit-overflow-scrolling: touch;
   user-select: text;
   -webkit-user-select: text;
   -webkit-touch-callout: default;
   touch-action: pan-y;
+  cursor: text;
 }
 
 .mobile-selection-copy {
@@ -1037,9 +1101,15 @@ function ctxClear()     { ctxMenu.show = false; term?.clear(); }
 </style>
 
 <style>
-.ctx-overlay { position: fixed; inset: 0; z-index: 9999; }
+.ctx-overlay {
+  position: fixed; inset: 0; z-index: 9999;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  touch-action: manipulation;
+}
 .ctx-menu {
-  position: fixed; background: var(--panel); border: 1px solid var(--border);
+  position: fixed; background-color: var(--panel); background: var(--panel); border: 1px solid var(--border);
   border-radius: var(--radius); padding: 4px; min-width: 200px;
   box-shadow: var(--shadow), 0 0 16px var(--glow); z-index: 10000;
 }

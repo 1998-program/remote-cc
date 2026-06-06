@@ -161,6 +161,7 @@ onMounted(() => loadDoc('usage.md'));
 .help-sidebar {
   width: 168px;
   flex-shrink: 0;
+  background: var(--panel);
   background: color-mix(in srgb, var(--panel) 78%, transparent);
   border-right: 1px solid var(--hairline);
   display: flex;
@@ -191,6 +192,7 @@ onMounted(() => loadDoc('usage.md'));
   height: 30px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
+  background: var(--panel2);
   background: color-mix(in srgb, var(--panel2) 84%, transparent);
   color: var(--muted);
   cursor: pointer;
@@ -334,6 +336,7 @@ onMounted(() => loadDoc('usage.md'));
     position: absolute;
     inset: 0;
     z-index: 2;
+    background: var(--overlay);
     background: color-mix(in srgb, #000000 42%, transparent);
     backdrop-filter: blur(2px);
   }
@@ -411,6 +414,7 @@ onMounted(() => loadDoc('usage.md'));
   color: var(--neon);
 }
 .help-md pre {
+  background: var(--panel);
   background: color-mix(in srgb, var(--panel) 88%, transparent);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -463,6 +467,7 @@ onMounted(() => loadDoc('usage.md'));
   height: auto;
   border-radius: var(--radius);
   border: 1px solid var(--border);
+  background: var(--panel);
   background: color-mix(in srgb, var(--panel) 72%, transparent);
   box-shadow: 0 12px 28px color-mix(in srgb, #000000 22%, transparent);
 }
