@@ -180,6 +180,15 @@ function sanitizeFilename(name) {
   return base && base !== '.' && base !== '..' ? base : 'upload.bin';
 }
 
+function decodeUploadFilename(encodedName, fallback = 'upload.bin') {
+  const raw = String(encodedName || fallback);
+  try {
+    return decodeURIComponent(raw);
+  } catch (_) {
+    return raw || fallback;
+  }
+}
+
 function sanitizeDirectoryName(name) {
   const raw = String(name || '').trim();
   if (!raw || raw === '.' || raw === '..') throw new Error('Invalid directory name');
@@ -205,7 +214,7 @@ function writeUploadedFile(reqDir, filename, buffer) {
   const stat = fs.statSync(safeDir);
   if (!stat.isDirectory()) throw new Error('Not a directory');
 
-  const safeName = sanitizeFilename(filename);
+  const safeName = sanitizeFilename(decodeUploadFilename(filename));
   const filePath = uniqueFilePath(safeDir, safeName);
   fs.writeFileSync(filePath, buffer);
   return statFile(filePath);
@@ -243,4 +252,5 @@ module.exports = {
   createDirectory,
   writeUploadedFile,
   readDownloadFile,
+  decodeUploadFilename,
 };

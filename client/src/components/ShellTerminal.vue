@@ -42,6 +42,7 @@ let heartbeatTimer = null;
 let heartbeatTimeout = null;
 let httpRun = 0;
 let connectedBadgeTimer = null;
+let replayingOutput = false;
 const WS_FALLBACK_DELAY = 3000;
 const WS_HEARTBEAT_INTERVAL = 25000;
 const WS_HEARTBEAT_TIMEOUT = 8000;
@@ -72,6 +73,12 @@ function clearTimers() {
 function markHeartbeatAlive() {
   clearTimeout(heartbeatTimeout);
   heartbeatTimeout = null;
+}
+
+function endReplayState() {
+  if (!replayingOutput) return;
+  replayingOutput = false;
+  terminalRef.value?.endReplay?.();
 }
 
 function refreshTerminalView() {
@@ -117,6 +124,7 @@ function start() {
 
   function forceHttpReconnect(message) {
     if (run !== wsRun || closing) return;
+    endReplayState();
     markDisconnected();
     wsRun++;
     clearTimers();
@@ -178,10 +186,13 @@ function start() {
       if (!msg?.type) throw 0;
       if (msg.type === 'session_list') return;
       if (msg.type === 'shell_replay_start') {
+        replayingOutput = true;
+        terminalRef.value?.beginReplay?.();
         terminalRef.value?.clear?.();
         return;
       }
       if (msg.type === 'shell_replay_end') {
+        endReplayState();
         terminalRef.value?.fit?.();
         refreshTerminalView();
         return;
@@ -209,11 +220,12 @@ function start() {
         return;
       }
     } catch (_) {}
-    terminalRef.value?.write(data);
+    terminalRef.value?.write(data, { suppressInput: replayingOutput });
   };
 
   socket.onclose = () => {
     clearTimers();
+    endReplayState();
     if (run !== wsRun || closing) return;
     markDisconnected();
     status.value = 'closed';
@@ -227,6 +239,7 @@ function start() {
 
 function cleanup(kill = true) {
   closing = true;
+  endReplayState();
   clearTimers();
   httpRun++;
   if (ws && ws.readyState === WebSocket.OPEN && kill) {
@@ -273,8 +286,9 @@ function applyHttpSnapshot(snapshot, clearFirst = false) {
   clearTimeout(readyTimer);
   cwd.value = snapshot.cwd || cwd.value;
   const shouldRefresh = Boolean(clearFirst || snapshot.reset || snapshot.output || reconnectNoticePending);
+  const suppressReplayInput = Boolean(clearFirst || snapshot.reset);
   if (clearFirst || snapshot.reset) terminalRef.value?.clear?.();
-  if (snapshot.output) terminalRef.value?.write?.(snapshot.output);
+  if (snapshot.output) terminalRef.value?.write?.(snapshot.output, { suppressInput: suppressReplayInput });
   if (snapshot.alive === false) {
     status.value = 'closed';
     refreshTerminalView();

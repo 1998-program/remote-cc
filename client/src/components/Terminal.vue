@@ -209,6 +209,14 @@ function shortPath(p) {
   return p.split('/').slice(-2).join('/');
 }
 
+function uploadFilenameHeaders(file) {
+  const encoded = encodeURIComponent(file?.name || 'upload.bin');
+  return {
+    'X-Filename': encoded,
+    'X-Filename-Encoded': encoded,
+  };
+}
+
 async function uploadFile(file) {
   if (!file) return;
   uploading.value = true;
@@ -220,7 +228,7 @@ async function uploadFile(file) {
       headers: {
         'Authorization': `Bearer ${localStorage.getItem('rcc_token') || ''}`,
         'Content-Type': 'application/octet-stream',
-        'X-Filename': file.name,
+        ...uploadFilenameHeaders(file),
       },
       body: buf,
     });
@@ -271,6 +279,11 @@ let touchMoved = false;
 let copyModeOpenedNearBottom = true;
 let mobileInputComposing = false;
 let suppressTerminalFocusUntil = 0;
+let replaySuppressDepth = 0;
+let terminalResponseWriteSuppressDepth = 0;
+let terminalResponseSuppressUntil = 0;
+let terminalAutoResponsePending = '';
+let terminalAutoResponsePendingAt = 0;
 
 // ── 自动锁底 + 上划暂停更新 ──────────────────────────────────────────────────
 let userScrolled = false;       // 用户是否主动上划
@@ -354,23 +367,163 @@ function flushPending() {
   if (pendingWrites.length === 0) return;
   const batch = pendingWrites.splice(0);
   let remaining = batch.length;
-  batch.forEach(d => term?.write(d, () => {
+  batch.forEach(item => writeToTerminal(item.data, { suppressInput: item.suppressInput }, () => {
     remaining -= 1;
     if (remaining === 0) scrollToBottomSoon();
   }));
 }
 
 // 对外暴露的 write：上划时缓存，否则直接写并锁底
-function smartWrite(data) {
+function smartWrite(data, options = {}) {
+  const item = { data, suppressInput: Boolean(options.suppressInput) };
   if (userScrolled || mobileCopyMode.value) {
     // 超出上限（跟 scrollback 一致）时丢弃最老的，保留最新
-    pendingWrites.push(data);
+    pendingWrites.push(item);
     const max = settings.scrollback || 5000;
     if (pendingWrites.length > max) pendingWrites.shift();
   } else {
     // xterm write is async; scroll after render so mobile Codex output stays pinned.
-    term?.write(data, scrollToBottomSoon);
+    writeToTerminal(data, options, scrollToBottomSoon);
   }
+}
+
+function writeToTerminal(data, options = {}, callback) {
+  if (!term) return;
+  let releaseSuppression = null;
+  if (options.suppressInput) {
+    terminalResponseWriteSuppressDepth += 1;
+    markTerminalResponseSuppression(1200);
+    let released = false;
+    const fallbackTimer = setTimeout(() => releaseSuppression?.(), 10000);
+    releaseSuppression = () => {
+      if (released) return;
+      released = true;
+      clearTimeout(fallbackTimer);
+      terminalResponseWriteSuppressDepth = Math.max(0, terminalResponseWriteSuppressDepth - 1);
+      markTerminalResponseSuppression(300);
+    };
+  }
+  term.write(data, () => {
+    releaseSuppression?.();
+    callback?.();
+  });
+}
+
+function markTerminalResponseSuppression(ms) {
+  terminalResponseSuppressUntil = Math.max(terminalResponseSuppressUntil, Date.now() + ms);
+}
+
+function beginReplay() {
+  replaySuppressDepth += 1;
+  markTerminalResponseSuppression(5000);
+}
+
+function endReplay() {
+  replaySuppressDepth = Math.max(0, replaySuppressDepth - 1);
+  markTerminalResponseSuppression(300);
+}
+
+function suppressingTerminalResponses() {
+  return replaySuppressDepth > 0 || terminalResponseWriteSuppressDepth > 0 || Date.now() < terminalResponseSuppressUntil;
+}
+
+function resetTerminalAutoResponseFilter() {
+  terminalAutoResponsePending = '';
+  terminalAutoResponsePendingAt = 0;
+}
+
+function setTerminalAutoResponsePending(value) {
+  terminalAutoResponsePending = value;
+  terminalAutoResponsePendingAt = value ? Date.now() : 0;
+}
+
+function shouldHoldCsiAutoResponsePrefix(seq) {
+  const body = seq.slice(2);
+  return /^[?>]?[0-9;]*$/.test(body);
+}
+
+function shouldHoldOscAutoResponsePrefix(seq) {
+  const body = seq.slice(2);
+  return body === '' || /^(?:1|10|11|12|4|4;\d*)$/.test(body) || /^(?:10|11|12|4;\d*);/.test(body);
+}
+
+function stripTerminalAutoResponses(data, { holdPartial = false } = {}) {
+  if (!data || typeof data !== 'string') return data;
+  if (terminalAutoResponsePending && Date.now() - terminalAutoResponsePendingAt > 1500) {
+    resetTerminalAutoResponseFilter();
+  }
+  const input = terminalAutoResponsePending + data;
+  resetTerminalAutoResponseFilter();
+  let output = '';
+
+  for (let i = 0; i < input.length;) {
+    if (input[i] !== '\x1b') {
+      output += input[i];
+      i += 1;
+      continue;
+    }
+
+    if (i + 1 >= input.length) {
+      if (holdPartial) setTerminalAutoResponsePending(input.slice(i));
+      else output += input.slice(i);
+      break;
+    }
+
+    const next = input[i + 1];
+    if (next === '[') {
+      let end = i + 2;
+      while (end < input.length) {
+        const code = input.charCodeAt(end);
+        if (code >= 0x40 && code <= 0x7e) break;
+        end += 1;
+      }
+      if (end >= input.length) {
+        const pending = input.slice(i);
+        if (holdPartial || shouldHoldCsiAutoResponsePrefix(pending)) setTerminalAutoResponsePending(pending);
+        else output += pending;
+        break;
+      }
+      const seq = input.slice(i, end + 1);
+      if (!/^\x1b\[[?>]?[0-9;]*[cR]$/.test(seq)) output += seq;
+      i = end + 1;
+      continue;
+    }
+
+    if (next === ']') {
+      let end = -1;
+      let endLen = 1;
+      for (let j = i + 2; j < input.length; j += 1) {
+        if (input[j] === '\x07') {
+          end = j;
+          break;
+        }
+        if (input[j] === '\x1b') {
+          if (j + 1 >= input.length) break;
+          if (input[j + 1] === '\\') {
+            end = j;
+            endLen = 2;
+            break;
+          }
+        }
+      }
+      if (end === -1) {
+        const pending = input.slice(i);
+        if (holdPartial || shouldHoldOscAutoResponsePrefix(pending)) setTerminalAutoResponsePending(pending);
+        else output += pending;
+        if (terminalAutoResponsePending.length > 2048) resetTerminalAutoResponseFilter();
+        break;
+      }
+      const seq = input.slice(i, end + endLen);
+      if (!/^\x1b\](?:(?:4;\d+)|10|11|12);/.test(seq)) output += seq;
+      i = end + endLen;
+      continue;
+    }
+
+    output += input[i];
+    i += 1;
+  }
+
+  return output;
 }
 
 onMounted(() => {
@@ -435,7 +588,10 @@ onMounted(() => {
   }
 
   term.onData(data => {
-    emit('input', data);
+    const shouldSuppress = suppressingTerminalResponses();
+    const input = stripTerminalAutoResponses(data, { holdPartial: shouldSuppress });
+    if (!input) return;
+    emit('input', input);
     // currentLine 统一由 App.vue 的 onTermInput 通过 trackInput() 更新
     // 这里不再重复处理，避免双重追踪
   });
@@ -518,7 +674,8 @@ onBeforeUnmount(() => {
   term?.dispose();
 });
 
-function write(data) { smartWrite(data); }
+function write(data, options = {}) { smartWrite(data, options); }
+function writeReplay(data) { smartWrite(data, { suppressInput: true }); }
 function fit() {
   fitAddon?.fit();
   if (!userScrolled && !mobileCopyMode.value) scrollToBottomSoon();
@@ -546,7 +703,7 @@ function trackInput(data) {
 
 function getCols() { return term?.cols ?? 80; }
 function getRows() { return term?.rows ?? 24; }
-defineExpose({ write, fit, scrollToBottom, clear, trackInput, getCols, getRows });
+defineExpose({ write, writeReplay, beginReplay, endReplay, fit, scrollToBottom, clear, trackInput, getCols, getRows });
 
 watch(() => props.symbolMode, mode => {
   if (mode !== 'shell') mobileModifier.value = '';

@@ -14,7 +14,7 @@ const {
   killSessionHttp, deleteSessionHttp, renameSessionHttp,
   startShellHttp, inputShellHttp, resizeShellHttp, pollShellHttp, killShellHttp,
 } = require('./pty-manager');
-const { listDir, readFilePreview, statFile, createDirectory, writeUploadedFile, readDownloadFile } = require('./fs-handler');
+const { listDir, readFilePreview, statFile, createDirectory, writeUploadedFile, readDownloadFile, decodeUploadFilename } = require('./fs-handler');
 const { getSettingsHandler, saveSettingsHandler } = require('./web-settings');
 
 const PORT = parseInt(process.env.PORT || 3000);
@@ -93,7 +93,8 @@ fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 app.post('/api/upload', (req, res) => {
   const contentType = req.headers['content-type'] || '';
   // 支持两种方式：multipart/form-data 和 application/octet-stream
-  const ext = (req.headers['x-filename'] || 'image.png')
+  const uploadName = decodeUploadFilename(req.headers['x-filename-encoded'] || req.headers['x-filename'] || 'image.png', 'image.png');
+  const ext = uploadName
     .replace(/[^a-zA-Z0-9._-]/g, '_')
     .match(/\.[a-zA-Z0-9]+$/)?.[0] || '.png';
   const filename = `${uuidv4()}${ext}`;
@@ -245,7 +246,7 @@ app.post('/api/fs/upload', (req, res) => {
     try {
       const result = writeUploadedFile(
         req.query.path || '/',
-        req.headers['x-filename'] || 'upload.bin',
+        req.headers['x-filename-encoded'] || req.headers['x-filename'] || 'upload.bin',
         Buffer.concat(chunks)
       );
       res.json(result);

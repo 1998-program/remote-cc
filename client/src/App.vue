@@ -482,9 +482,16 @@ function connectEntryWS(entry) {
     heartbeatTimeout = null;
   }
 
+  function endEntryReplay() {
+    if (!entry._replayingOutput) return;
+    entry._replayingOutput = false;
+    termRefs[entry.sid]?.endReplay?.();
+  }
+
   function forceHttpFallback() {
     if (destroyed) return;
     destroyed = true;
+    endEntryReplay();
     markEntryDisconnected(entry);
     clearWsTimers();
     try { ws.close(); } catch (_) {}
@@ -592,20 +599,26 @@ function connectEntryWS(entry) {
           if (entry.connectionStatus === 'connecting') markEntryConnected(entry, 'ws', { refresh: false });
           return;
         case 'replay_start': {
+          entry._replayingOutput = true;
           if (entry.connectionStatus !== 'connected') markEntryConnected(entry, 'ws', { refresh: false });
           const el = termRefs[entry.sid];
-          if (el) el.clear();
+          if (el) {
+            el.beginReplay?.();
+            el.clear();
+          }
           return;
         }
         case 'replay_end': {
           if (entry.connectionStatus !== 'connected') markEntryConnected(entry, 'ws', { refresh: false });
           const el = termRefs[entry.sid];
           if (el) {
+            el.endReplay?.();
             el.fit();
             nextTick(() => el.scrollToBottom());
             // 发送当前实际尺寸（replay 结束时 PTY 应该知道正确宽度）
             ws.send(JSON.stringify({ type: 'resize', cols: el.getCols?.() ?? 80, rows: el.getRows?.() ?? 24 }));
           }
+          entry._replayingOutput = false;
           return;
         }
         case 'exit': {
@@ -629,7 +642,7 @@ function connectEntryWS(entry) {
     // Raw PTY data
     if (entry.connectionStatus !== 'connected') markEntryConnected(entry, 'ws', { refresh: false });
     const el = termRefs[entry.sid];
-    if (el) el.write(data);
+    if (el) el.write(data, { suppressInput: !!entry._replayingOutput });
   };
 
   ws.onerror = () => {
@@ -638,6 +651,7 @@ function connectEntryWS(entry) {
 
   ws.onclose = () => {
     clearWsTimers();
+    endEntryReplay();
     if (destroyed) return;
     if (!opened) {
       switchToHttpFallback();
@@ -654,6 +668,7 @@ function connectEntryWS(entry) {
 
   entry._destroy = () => {
     destroyed = true;
+    endEntryReplay();
     clearWsTimers();
     try { ws.close(); } catch (_) {}
   };
@@ -677,8 +692,9 @@ function applyHttpSessionSnapshot(entry, snapshot, shouldClear = false) {
 
   const el = termRefs[entry.sid];
   const shouldRefresh = Boolean(shouldClear || snapshot.reset || snapshot.output || entry._reconnectNoticePending);
+  const suppressReplayInput = Boolean(shouldClear || snapshot.reset);
   if ((shouldClear || snapshot.reset) && el) el.clear();
-  if (snapshot.output && el) el.write(snapshot.output);
+  if (snapshot.output && el) el.write(snapshot.output, { suppressInput: suppressReplayInput });
   if (el && snapshot.output) nextTick(() => el.scrollToBottom());
   if (snapshot.alive === false) {
     entry.connectionStatus = 'closed';
@@ -733,7 +749,7 @@ async function startEntryHttp(entry) {
           refresh: Boolean(result.reset || result.output || entry._reconnectNoticePending),
         });
         if (result.reset) termRefs[entry.sid]?.clear?.();
-        if (result.output) termRefs[entry.sid]?.write?.(result.output);
+        if (result.output) termRefs[entry.sid]?.write?.(result.output, { suppressInput: !!result.reset });
         cursor = result.cursor ?? cursor;
         if (result.alive === false) {
           handleHttpExit(entry, result.exitCode);

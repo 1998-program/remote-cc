@@ -18,7 +18,7 @@ const fs      = require('fs');
 const os      = require('os');
 const { v4: uuidv4 } = require('uuid');
 const { getProjects, getSessions, readSession } = require('./history');
-const { listDir, readFilePreview, statFile, createDirectory, writeUploadedFile, readDownloadFile } = require('./fs-handler');
+const { listDir, readFilePreview, statFile, createDirectory, writeUploadedFile, readDownloadFile, decodeUploadFilename } = require('./fs-handler');
 const { getSettingsHandler, saveSettingsHandler } = require('./web-settings');
 const { getAgentStatuses } = require('./agent-config');
 
@@ -55,7 +55,8 @@ const UPLOAD_DIR = path.join(RCC_DIR, 'uploads');
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
 app.post('/api/upload', (req, res) => {
-  const ext = (req.headers['x-filename'] || 'image.png')
+  const uploadName = decodeUploadFilename(req.headers['x-filename-encoded'] || req.headers['x-filename'] || 'image.png', 'image.png');
+  const ext = uploadName
     .replace(/[^a-zA-Z0-9._-]/g, '_')
     .match(/\.[a-zA-Z0-9]+$/)?.[0] || '.png';
   const filename = `${uuidv4()}${ext}`;
@@ -123,7 +124,7 @@ app.post('/api/fs/upload', (req, res) => {
     try {
       const result = writeUploadedFile(
         req.query.path || '/',
-        req.headers['x-filename'] || 'upload.bin',
+        req.headers['x-filename-encoded'] || req.headers['x-filename'] || 'upload.bin',
         Buffer.concat(chunks)
       );
       res.json(result);

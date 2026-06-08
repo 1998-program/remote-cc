@@ -108,13 +108,21 @@ function shellBase(shellId = '1') {
   return id === '1' ? '/api/shell' : `/api/shell/${encodeURIComponent(id)}`;
 }
 
+function uploadFilenameHeaders(file) {
+  const encoded = encodeURIComponent(file?.name || 'upload.bin');
+  return {
+    'X-Filename': encoded,
+    'X-Filename-Encoded': encoded,
+  };
+}
+
 async function uploadFile(path, file) {
   const res = await fetch(BASE + `/api/fs/upload?path=${encodeURIComponent(path)}`, {
     method: 'POST',
     headers: {
       ...authHeader(),
       'Content-Type': 'application/octet-stream',
-      'X-Filename': file.name,
+      ...uploadFilenameHeaders(file),
     },
     body: await file.arrayBuffer(),
   });
