@@ -280,19 +280,57 @@ fi
 
 COMMON_GYPI="$(node -e "process.stdout.write(require('path').join(process.execPath,'../../include/node/common.gypi'))")"
 PATCHED=false
-GPP_MAJOR=$(g++ -dumpversion 2>/dev/null | cut -d. -f1)
+GPP_MAJOR=""
+if command -v g++ &>/dev/null; then
+  GPP_MAJOR=$(g++ -dumpversion 2>/dev/null | cut -d. -f1 || true)
+fi
+
+restore_common_gypi() {
+  if [[ "$PATCHED" == "true" && -f "${COMMON_GYPI}.rcc_bak" ]]; then
+    mv "${COMMON_GYPI}.rcc_bak" "$COMMON_GYPI"
+  fi
+}
+
+patch_gypi_std() {
+  local file="$1"
+  [[ -f "$file" ]] || return 0
+  sed -i 's/gnu++20/gnu++2a/g' "$file"
+}
+
+ensure_node_gyp_cache() {
+  local node_gyp_js=""
+  local p
+  for p in \
+    "$(npm root -g 2>/dev/null)/npm/node_modules/node-gyp/bin/node-gyp.js" \
+    "$(dirname "$(dirname "$(command -v npm)")")/lib/node_modules/npm/node_modules/node-gyp/bin/node-gyp.js"; do
+    if [[ -f "$p" ]]; then
+      node_gyp_js="$p"
+      break
+    fi
+  done
+  [[ -n "$node_gyp_js" ]] || return 0
+  node "$node_gyp_js" install --target="$NODE_VER_FULL" >/dev/null 2>&1 || return 0
+}
+
 if [[ -n "$GPP_MAJOR" && "$GPP_MAJOR" -lt 10 ]]; then
+  if [[ -f "${COMMON_GYPI}.rcc_bak" ]]; then
+    info "恢复上次安装遗留的 common.gypi 备份 ..."
+    mv "${COMMON_GYPI}.rcc_bak" "$COMMON_GYPI"
+  fi
   if [[ -f "$COMMON_GYPI" ]] && grep -q "gnu++20" "$COMMON_GYPI" 2>/dev/null; then
     info "gcc $GPP_MAJOR 不支持 gnu++20，临时 patch node 安装目录 common.gypi ..."
     cp "$COMMON_GYPI" "${COMMON_GYPI}.rcc_bak"
-    sed -i 's/gnu++20/gnu++2a/g' "$COMMON_GYPI"
+    patch_gypi_std "$COMMON_GYPI"
     PATCHED=true
   fi
+  ensure_node_gyp_cache
+  patch_gypi_std "$NODE_GYP_CACHE/include/node/common.gypi"
 fi
 
+trap restore_common_gypi EXIT
 (cd "$SCRIPT_DIR/server" && npm install --loglevel=warn 2>&1 | tail -2)
-
-[[ "$PATCHED" == "true" ]] && mv "${COMMON_GYPI}.rcc_bak" "$COMMON_GYPI"
+restore_common_gypi
+trap - EXIT
 
 if ! node -e "require('$SCRIPT_DIR/server/node_modules/node-pty')" 2>/dev/null; then
   err "node-pty 编译失败。请确认 g++ 已安装：\n  CentOS: yum install gcc-c++\n  Ubuntu: apt install g++ build-essential"

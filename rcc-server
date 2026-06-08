@@ -9,7 +9,13 @@
 #   status  — 查看状态
 #   log     — 实时日志
 
-RCC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SOURCE="${BASH_SOURCE[0]}"
+while [ -L "$SOURCE" ]; do
+  DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
+  SOURCE="$(readlink "$SOURCE")"
+  [[ "$SOURCE" != /* ]] && SOURCE="$DIR/$SOURCE"
+done
+RCC_DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
 SERVER_DIR="$RCC_DIR/server"
 PID_FILE="/tmp/rcc-server.pid"
 LOG_FILE="/tmp/rcc.log"
