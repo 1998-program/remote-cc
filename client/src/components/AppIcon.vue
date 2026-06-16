@@ -79,6 +79,8 @@ function iconFor(name, style) {
     case 'spinner': return spinnerIcon(style);
     case 'refresh': return refreshIcon(style);
     case 'play': return playIcon(style);
+    case 'enter': return enterIcon(style);
+    case 'send': return sendIcon(style);
     case 'image': return imageIcon(style);
     case 'status-live': return statusIcon(style, true);
     case 'status-dead': return statusIcon(style, false);
@@ -165,6 +167,8 @@ function lineIcon(name) {
     case 'spinner': return [node('path', { d: 'M21 12a9 9 0 0 1-9 9' }), node('path', { d: 'M3 12a9 9 0 0 1 9-9' })];
     case 'refresh': return [node('path', { d: 'M20 6v5h-5' }), node('path', { d: 'M4 18v-5h5' }), node('path', { d: 'M18.2 10a6.5 6.5 0 0 0-11.1-3.1L4 10' }), node('path', { d: 'M5.8 14a6.5 6.5 0 0 0 11.1 3.1L20 14' })];
     case 'play': return [node('polygon', { points: '8 5 19 12 8 19', fill: 'currentColor', stroke: 'none' })];
+    case 'enter': return enterIcon('line');
+    case 'send': return sendIcon('line');
     case 'image': return [node('rect', { x: 4, y: 5, width: 16, height: 14, rx: 2 }), node('circle', { cx: 9, cy: 10, r: 1.4 }), node('path', { d: 'm5.5 17 4.2-4.3 3 3 1.9-1.9 3.9 4.2' })];
     case 'status-live': return [node('circle', { cx: 12, cy: 12, r: 6, fill: 'currentColor', stroke: 'none' })];
     case 'status-dead': return [node('circle', { cx: 12, cy: 12, r: 6 }), node('path', { d: 'M8.5 8.5 15.5 15.5' })];
@@ -345,6 +349,52 @@ function playIcon(style) {
   if (style === 'sharp') return [node('polygon', { points: '8 4 20 12 8 20', ...fill({ opacity: 0.9 }) })];
   if (style === 'duo') return [node('circle', { cx: 12, cy: 12, r: 8, ...tint({ opacity: 0.12 }) }), node('polygon', { points: '9 6.5 18 12 9 17.5', ...fill({ opacity: 0.9 }) })];
   return [node('polygon', { points: '8 5 19 12 8 19', ...fill({ opacity: style === 'mono' ? 0.8 : 1 }) })];
+}
+
+function enterIcon(style) {
+  if (style === 'bold') return [
+    node('path', { d: 'M18 5v6.5A3.5 3.5 0 0 1 14.5 15H6', opacity: 0.35 }),
+    node('path', { d: 'M18 5v6.5A3.5 3.5 0 0 1 14.5 15H6' }),
+    node('path', { d: 'm10 11-4 4 4 4' }),
+  ];
+  if (style === 'sharp') return [
+    node('path', { d: 'M19 4v8H7' }),
+    node('path', { d: 'm11 8-4 4 4 4' }),
+  ];
+  if (style === 'duo') return [
+    node('path', { d: 'M18.5 5v6.7A3.3 3.3 0 0 1 15.2 15H6.5', opacity: 0.42 }),
+    node('path', { d: 'M18.5 5v6.7A3.3 3.3 0 0 1 15.2 15H6.5' }),
+    node('path', { d: 'm10.2 11.3-3.7 3.7 3.7 3.7' }),
+  ];
+  return [
+    node('path', { d: 'M18.5 5v6.7A3.3 3.3 0 0 1 15.2 15H6.5' }),
+    node('path', { d: 'm10.2 11.3-3.7 3.7 3.7 3.7' }),
+  ];
+}
+
+function sendIcon(style) {
+  if (style === 'bold') return [
+    node('path', { d: 'M4 11.4 20.5 4.8 13.9 21.2l-3.2-7-6.7-2.8Z', ...fill({ opacity: 0.18 }) }),
+    node('path', { d: 'M4 11.4 20.5 4.8 13.9 21.2l-3.2-7-6.7-2.8Z' }),
+    node('path', { d: 'm10.7 14.2 4.2-4.1' }),
+  ];
+  if (style === 'sharp') return [
+    node('path', { d: 'M3.5 11.5 20.5 4.5 13.5 21.5 10.5 14.5Z' }),
+    node('path', { d: 'm10.5 14.5 5-5' }),
+  ];
+  if (style === 'duo') return [
+    node('path', { d: 'M4 11.4 20.5 4.8 13.9 21.2l-3.2-7-6.7-2.8Z', ...tint({ opacity: 0.16 }) }),
+    node('path', { d: 'M4 11.4 20.5 4.8 13.9 21.2l-3.2-7-6.7-2.8Z' }),
+    node('path', { d: 'm10.7 14.2 4.2-4.1', opacity: 0.72 }),
+  ];
+  if (style === 'mono') return [
+    node('path', { d: 'M4 12 20 5 13 20l-2.8-6.2Z' }),
+    node('path', { d: 'm10.2 13.8 4.4-4.3' }),
+  ];
+  return [
+    node('path', { d: 'M4 11.5 20 5 13.5 20l-3-6.5Z' }),
+    node('path', { d: 'm10.5 13.5 4.5-4.3' }),
+  ];
 }
 
 function imageIcon(style) {

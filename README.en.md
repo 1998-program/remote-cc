@@ -154,6 +154,12 @@ Inside any session: **`Ctrl+]`** goes back to the menu without killing the agent
 
 ## Changelog
 
+### 2026-06-16
+
+- **Mobile input improvements**: the first Agent shortcut row is now Upload, MODE, Newline, and Send; Newline sends LF, while Send sends CR
+- **Mobile keyboard Enter setting**: Settings now lets mobile users choose whether the keyboard Enter key sends or inserts a newline, persisted in `~/.rcc/web-settings.json`
+- **Settings sync fix**: Web settings now compare local and server timestamps so a refresh does not overwrite freshly changed terminal settings with older server data
+
 ### 2026-06-05
 
 - **HTTP fallback transport**: when WebSocket is unavailable, the Home session list refreshes by HTTP polling, and Agent terminals plus shared terminals switch to HTTP long polling
@@ -167,6 +173,9 @@ Inside any session: **`Ctrl+]`** goes back to the menu without killing the agent
 - **Settings polish**: mobile UI-style previews now use full-width cards instead of narrow columns
 - **Docs screenshots**: refreshed screenshots and grouped desktop, mobile, and TUI images separately
 
+<details>
+<summary>Older changelog</summary>
+
 ### 2026-06-03
 
 - **Web console enhancements**: directory picker for new sessions, plus a file browser with `/` root access, folder creation, upload/download, and path copy
@@ -175,9 +184,6 @@ Inside any session: **`Ctrl+]`** goes back to the menu without killing the agent
 - **Appearance and language**: defaults to Studio + Aurora + Material, with 9 UI styles, dark/light color themes, 6 icon styles, and complete zh/en switching
 - **Settings persistence**: Web settings are saved to `~/.rcc/web-settings.json`, including default paths, themes, terminal preferences, and language
 - **TUI detach fix**: fixes first `Ctrl+]` detach after creating a session from `rcc-tui`
-
-<details>
-<summary>Older changelog</summary>
 
 ### 2026-05-21
 

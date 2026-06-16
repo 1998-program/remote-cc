@@ -16,7 +16,7 @@
       autocorrect="off"
       spellcheck="false"
       inputmode="text"
-      enterkeyhint="enter"
+      :enterkeyhint="mobileEnterKeyHint"
       @click.stop
       @input="onMobileInput"
       @keydown="onMobileKeydown"
@@ -171,6 +171,8 @@ const mobileCopyTextStyle = computed(() => ({
 const uploading = ref(false);
 const dragOver  = ref(false);
 const lastUploadPath = ref('');
+const mobileEnterSends = computed(() => settings.mobileKeyboardEnter !== 'newline');
+const mobileEnterKeyHint = computed(() => mobileEnterSends.value ? 'send' : 'enter');
 
 // 始终把焦点还给 xterm 的内部 textarea
 function focusTerm(e) {
@@ -199,7 +201,7 @@ function configureInputMode(input) {
   input.setAttribute('autocapitalize', 'none');
   input.setAttribute('spellcheck', 'false');
   input.setAttribute('inputmode', 'text');
-  input.setAttribute('enterkeyhint', 'enter');
+  input.setAttribute('enterkeyhint', mobileEnterKeyHint.value);
   input.autocapitalize = 'none';
   input.autocorrect = 'off';
   input.spellcheck = false;
@@ -796,7 +798,7 @@ function onMobileCompositionEnd(e) {
 function onMobileKeydown(e) {
   if (mobileInputComposing) return;
   const mapped = {
-    Enter: '\r',
+    Enter: mobileEnterSends.value ? '\r' : '\n',
     Backspace: '\x7f',
     Tab: '\t',
     Escape: '\x1b',

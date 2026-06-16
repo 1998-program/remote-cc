@@ -178,6 +178,16 @@
         </div>
 
         <div class="sp-field sp-field-row">
+          <label class="sp-label">{{ t.mobile_keyboard_enter }}</label>
+          <div class="sp-radio-group">
+            <label v-for="item in mobileEnterOptions" :key="item.value" class="sp-radio">
+              <input type="radio" :value="item.value" v-model="settings.mobileKeyboardEnter" />
+              <span>{{ t[item.labelKey] }}</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="sp-field sp-field-row">
           <label class="sp-label">{{ t.shell_terminal_slots }}</label>
           <div class="sp-stepper">
             <button class="sp-step-btn" @click="changeShellSlots(-1)"><AppIcon name="minus" /></button>
@@ -369,6 +379,10 @@ const directoryFields = [
 const agentCommandFields = [
   { id: 'claude', key: 'claudeCommand', name: 'Claude Code', placeholder: 'claude' },
   { id: 'codex', key: 'codexCommand', name: 'Codex', placeholder: 'codex' },
+];
+const mobileEnterOptions = [
+  { value: 'send', labelKey: 'enter_send' },
+  { value: 'newline', labelKey: 'enter_newline' },
 ];
 
 const dirPickerTarget = ref('');

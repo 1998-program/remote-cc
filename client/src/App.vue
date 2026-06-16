@@ -215,7 +215,14 @@ import HelpPage          from './components/HelpPage.vue';
 import FileBrowser       from './components/FileBrowser.vue';
 import ShellTerminal     from './components/ShellTerminal.vue';
 import AppIcon           from './components/AppIcon.vue';
-import { applySettings, settings, snapshotSettings, COLOR_THEMES } from './settings.js';
+import {
+  applySettings,
+  getLocalSettingsUpdatedAt,
+  markSettingsSynced,
+  settings,
+  snapshotSettings,
+  COLOR_THEMES,
+} from './settings.js';
 import { useI18n } from './i18n.js';
 import { route, navigate } from './router.js';
 
@@ -1029,15 +1036,22 @@ async function syncSettingsFromServer() {
     ...snapshotSettings(),
     username: currentSettingsUsername(),
   };
+  const localUpdatedAt = getLocalSettingsUpdatedAt();
 
   try {
     const remote = await api.getSettings();
     if (remote?.persisted) {
-      applyingRemoteSettings = true;
-      applySettings(remote.settings);
-      settings.username = currentSettingsUsername();
+      if (settingsTimestamp(localUpdatedAt) > settingsTimestamp(remote.updatedAt)) {
+        const saved = await api.saveSettings(localSnapshot);
+        markSettingsSynced(saved?.updatedAt);
+      } else {
+        applyingRemoteSettings = true;
+        applySettings(remote.settings, { updatedAt: remote.updatedAt });
+        settings.username = currentSettingsUsername();
+      }
     } else {
-      await api.saveSettings(localSnapshot);
+      const saved = await api.saveSettings(localSnapshot);
+      markSettingsSynced(saved?.updatedAt);
     }
     remoteSettingsReady = true;
   } catch (e) {
@@ -1049,13 +1063,20 @@ async function syncSettingsFromServer() {
   }
 }
 
+function settingsTimestamp(value) {
+  const ms = Date.parse(value || '');
+  return Number.isFinite(ms) ? ms : 0;
+}
+
 function queueSettingsSave() {
   if (!authed.value || !remoteSettingsReady || applyingRemoteSettings) return;
   clearTimeout(settingsSaveTimer);
   settingsSaveTimer = setTimeout(() => {
-    api.saveSettings(snapshotSettings()).catch(e => {
-      if (e?.message !== 'Unauthorized') remoteSettingsReady = false;
-    });
+    api.saveSettings(snapshotSettings())
+      .then(saved => markSettingsSynced(saved?.updatedAt))
+      .catch(e => {
+        if (e?.message !== 'Unauthorized') remoteSettingsReady = false;
+      });
   }, 500);
 }
 

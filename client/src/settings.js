@@ -4,6 +4,9 @@
 import { reactive, watch } from 'vue';
 
 const STORAGE_KEY = 'rcc_settings';
+const META_KEY = 'rcc_settings_meta';
+const MOBILE_KEYBOARD_ENTER_VALUES = new Set(['send', 'newline']);
+let localPersistStampOverride = '';
 
 export const DEFAULTS = {
   // ── 外观 ──────────────────────────────────────
@@ -20,6 +23,7 @@ export const DEFAULTS = {
   cursorBlink:   true,
   scrollback:    5000,
   symbolBar:     true,        // 显示符号快捷键栏
+  mobileKeyboardEnter: 'send', // 'send' | 'newline'
   shellTerminalSlots: 1,       // Web 终端槽位数
 
   // ── 连接 ──────────────────────────────────────
@@ -39,32 +43,71 @@ export const DEFAULTS = {
   language: 'zh',   // 'zh' | 'en'
 };
 
+function normalizeSettingsRecord(source = {}) {
+  const next = { ...DEFAULTS, ...source };
+  if (!MOBILE_KEYBOARD_ENTER_VALUES.has(next.mobileKeyboardEnter)) {
+    next.mobileKeyboardEnter = DEFAULTS.mobileKeyboardEnter;
+  }
+  return next;
+}
+
+function writeSettingsMeta(updatedAt = new Date().toISOString()) {
+  try { localStorage.setItem(META_KEY, JSON.stringify({ updatedAt })); } catch (_) {}
+}
+
+function persistLocalSettings(val, updatedAt = new Date().toISOString()) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...val }));
+    writeSettingsMeta(updatedAt);
+  } catch (_) {}
+}
+
 function loadSettings() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return { ...DEFAULTS, ...JSON.parse(raw) };
+    if (raw) {
+      if (!getLocalSettingsUpdatedAt()) writeSettingsMeta();
+      return normalizeSettingsRecord(JSON.parse(raw));
+    }
   } catch (_) {}
-  return { ...DEFAULTS };
+  return normalizeSettingsRecord();
 }
 
 export const settings = reactive(loadSettings());
 
 // 自动持久化
 watch(settings, (val) => {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...val })); } catch (_) {}
+  persistLocalSettings(val, localPersistStampOverride || new Date().toISOString());
 }, { deep: true });
 
 export function resetSettings() {
-  Object.assign(settings, DEFAULTS);
+  Object.assign(settings, normalizeSettingsRecord(DEFAULTS));
 }
 
 export function snapshotSettings() {
   return { ...settings };
 }
 
-export function applySettings(nextSettings) {
+export function applySettings(nextSettings, options = {}) {
   if (!nextSettings || typeof nextSettings !== 'object') return;
-  Object.assign(settings, { ...DEFAULTS, ...nextSettings });
+  if (typeof options.updatedAt === 'string') {
+    localPersistStampOverride = options.updatedAt;
+    setTimeout(() => { localPersistStampOverride = ''; }, 0);
+  }
+  Object.assign(settings, normalizeSettingsRecord(nextSettings));
+}
+
+export function getLocalSettingsUpdatedAt() {
+  try {
+    const meta = JSON.parse(localStorage.getItem(META_KEY) || '{}');
+    return typeof meta.updatedAt === 'string' ? meta.updatedAt : '';
+  } catch (_) {
+    return '';
+  }
+}
+
+export function markSettingsSynced(updatedAt) {
+  writeSettingsMeta(updatedAt || new Date().toISOString());
 }
 
 // ── UI Style CSS class 映射 ───────────────────────────────────────────────────

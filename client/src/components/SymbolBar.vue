@@ -1,15 +1,20 @@
 <template>
   <div class="symbol-bar" :class="shellMode ? 'shell-mode' : 'cc-mode'">
-    <!-- CC 模式：桌面单排；窄屏时上传/MODE 独占第一排 -->
+    <!-- CC 模式：桌面单排；窄屏时上传/MODE/换行/发送独占第一排 -->
     <div v-if="!shellMode" class="symbol-scroll" :class="{ 'has-prefix': hasPrefixSlot }">
       <slot name="prefix"></slot>
       <button v-for="sym in CC_SYMBOLS" :key="sym.key"
         class="sym-btn"
         :class="`sym-btn--${sym.key}`"
+        :title="sym.title || sym.label"
+        :aria-label="sym.title || sym.label"
         @click="onTap(sym)"
         @touchstart.prevent="onTouchStart(sym)"
         @touchend.prevent="onTouchEnd(sym)"
-      >{{ sym.label }}</button>
+      >
+        <AppIcon v-if="sym.icon" :name="sym.icon" />
+        <span v-else>{{ sym.label }}</span>
+      </button>
     </div>
 
     <!-- Shell 模式：两行移动端专用键位 -->
@@ -59,6 +64,7 @@
 
 <script setup>
 import { computed, reactive, useSlots } from 'vue';
+import AppIcon from './AppIcon.vue';
 
 const props = defineProps({
   currentLine: { type: String, default: '' },
@@ -76,9 +82,11 @@ const shellMode = computed(() => {
   return props.currentLine.startsWith('!');
 });
 
-// ── CC 模式：不含回车 ─────────────────────────────────────────────────────────
+// ── CC 模式 ──────────────────────────────────────────────────────────────────
 const CC_SYMBOLS = [
   { key: 'mode',  label: 'MODE', value: '\x1b[Z' },
+  { key: 'newline', label: '换行', icon: 'enter', value: '\n', title: '换行 (LF)' },
+  { key: 'enter', label: '发送', icon: 'send', value: '\r', title: '发送 (CR)' },
   { key: 'esc',   label: 'Esc', value: '\x1b' },
   { key: 'tab',   label: 'Tab', value: '\t' },
   { key: 'slash', label: '/',   value: '/' },
@@ -87,7 +95,6 @@ const CC_SYMBOLS = [
   { key: 'down',  label: '↓',   value: '\x1b[B' },
   { key: 'left',  label: '←',   value: '\x1b[D' },
   { key: 'right', label: '→',   value: '\x1b[C' },
-  { key: 'enter', label: '⏎',   value: '\r' },   // 回车放最右
 ];
 
 // ── Shell 模式：两行移动端专用键位。修饰键由 Terminal.vue 作用到下一次输入。──
@@ -242,15 +249,19 @@ function onTouchEnd(sym) {
   border-color: color-mix(in srgb, var(--neon) 40%, transparent);
 }
 
-/* ⏎ 回车：最右侧，neon2 色区分 */
-.cc-mode .sym-btn:last-child {
+/* 换行 / 发送：neon2 色区分 */
+.cc-mode .sym-btn--newline,
+.cc-mode .sym-btn--enter {
   color: var(--neon2);
   border-color: var(--border-strong);
   border-color: color-mix(in srgb, var(--neon2) 25%, transparent);
   background: var(--panel2);
   background: color-mix(in srgb, var(--neon2) 6%, var(--panel2));
+  font-weight: 800;
+  --app-icon-size: 17px;
 }
-.cc-mode .sym-btn:last-child:active {
+.cc-mode .sym-btn--newline:active,
+.cc-mode .sym-btn--enter:active {
   background: var(--panel3);
   background: color-mix(in srgb, var(--neon2) 20%, transparent);
   box-shadow: 0 0 6px color-mix(in srgb, var(--neon2) 40%, transparent);
@@ -318,11 +329,11 @@ function onTouchEnd(sym) {
   }
   .cc-mode .symbol-scroll.has-prefix {
     display: grid;
-    grid-template-columns: repeat(18, minmax(0, 1fr));
+    grid-template-columns: repeat(16, minmax(0, 1fr));
     align-items: stretch;
   }
   .cc-mode .symbol-scroll.has-prefix :slotted(*) {
-    grid-column: span 9;
+    grid-column: span 4;
     height: var(--symbol-button-height);
     min-height: var(--symbol-button-height);
   }
@@ -331,11 +342,16 @@ function onTouchEnd(sym) {
     min-height: var(--symbol-button-height);
   }
   .cc-mode .symbol-scroll.has-prefix .sym-btn--mode {
-    grid-column: span 9;
+    grid-column: span 4;
     flex-basis: auto;
   }
-  .cc-mode .symbol-scroll.has-prefix .sym-btn:not(.sym-btn--mode) {
+  .cc-mode .symbol-scroll.has-prefix .sym-btn:not(.sym-btn--mode):not(.sym-btn--newline):not(.sym-btn--enter) {
     grid-column: span 2;
+  }
+  .cc-mode .symbol-scroll.has-prefix .sym-btn--newline,
+  .cc-mode .symbol-scroll.has-prefix .sym-btn--enter {
+    grid-column: span 4;
+    font-size: 11px;
   }
 }
 </style>

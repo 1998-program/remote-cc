@@ -17,6 +17,7 @@ const DEFAULTS = {
   cursorBlink: true,
   scrollback: 5000,
   symbolBar: true,
+  mobileKeyboardEnter: 'send',
   shellTerminalSlots: 1,
 
   reconnectDelay: 1000,
@@ -39,6 +40,7 @@ const STRING_LIMITS = {
   iconStyle: 32,
   fontFamily: 64,
   cursorStyle: 32,
+  mobileKeyboardEnter: 16,
   fileBrowserDefaultPath: 2048,
   shellDefaultCwd: 2048,
   newConversationDefaultDir: 2048,
@@ -59,6 +61,7 @@ const NUMBER_LIMITS = {
 };
 
 const BOOLEAN_KEYS = new Set(['cursorBlink', 'symbolBar', 'wsKeepAlive']);
+const MOBILE_KEYBOARD_ENTER_VALUES = new Set(['send', 'newline']);
 
 function clampNumber(value, fallback, min, max) {
   const n = Number(value);
@@ -85,6 +88,10 @@ function sanitizeSettings(input = {}) {
 
   for (const key of BOOLEAN_KEYS) {
     if (typeof source[key] === 'boolean') result[key] = source[key];
+  }
+
+  if (!MOBILE_KEYBOARD_ENTER_VALUES.has(result.mobileKeyboardEnter)) {
+    result.mobileKeyboardEnter = DEFAULTS.mobileKeyboardEnter;
   }
 
   return result;
