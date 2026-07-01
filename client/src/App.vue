@@ -148,8 +148,9 @@
         <!-- ── Files ─────────────────────────────────────────────────── -->
         <div v-show="view === 'files'" class="files-view">
           <FileBrowser
-            :initial-path="settings.fileBrowserDefaultPath || '/'"
+            :initial-path="fileBrowserInitialPath"
             @close="toggleOverlay('files')"
+            @path-change="rememberFileBrowserPath"
           />
         </div>
 
@@ -235,6 +236,14 @@ function setTheme(id) { settings.colorTheme = id; }
 const appChromeVars = computed(() => ({
   '--topbar-h': `${Math.min(64, Math.max(38, Number(settings.topbarHeight) || 44))}px`,
 }));
+const fileBrowserInitialPath = computed(() =>
+  settings.fileBrowserLastPath || settings.fileBrowserDefaultPath || '/'
+);
+
+function rememberFileBrowserPath(path) {
+  const nextPath = String(path || '').trim();
+  if (nextPath) settings.fileBrowserLastPath = nextPath;
+}
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 const authed     = ref(isLoggedIn());

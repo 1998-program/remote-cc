@@ -33,6 +33,7 @@ export const DEFAULTS = {
 
   // ── 远程控制 ──────────────────────────────────
   fileBrowserDefaultPath: '/', // 文件管理器默认目录
+  fileBrowserLastPath: '',     // 文件管理器最后访问目录
   shellDefaultCwd: '/',        // 终端默认目录
   newConversationDefaultDir: '~', // 新建会话默认目录
   claudeCommand: '',           // 自定义 Claude 协议命令

@@ -154,6 +154,12 @@ Inside any session: **`Ctrl+]`** goes back to the menu without killing the agent
 
 ## Changelog
 
+### 2026-07-01
+
+- **Agent terminal copy and paste**: fixes PC selection coordinate drift; `Ctrl/Cmd+C` copies when text is selected and keeps interrupt behavior when nothing is selected; `Ctrl/Cmd+V` now uses the browser clipboard path to avoid Windows/X11 server-side clipboard failures
+- **Reading history while tasks run**: manual scrolling pauses bottom lock during Agent output, then returns to the bottom after a short idle delay
+- **File browser directory state**: remembers the last visited directory and restores it after refresh; changing the default directory clears that remembered state
+
 ### 2026-06-16
 
 - **Mobile input improvements**: the first Agent shortcut row is now Upload, MODE, Newline, and Send; Newline sends LF, while Send sends CR
@@ -166,15 +172,15 @@ Inside any session: **`Ctrl+]`** goes back to the menu without killing the agent
 - **Reverse-proxy compatibility**: adds HTTP fallback for session control actions such as `kill`, `delete`, and `rename`, for access layers that do not pass WebSocket Upgrade
 - **Idempotency handling**: session start/attach, terminal start, resize, and kill/delete controls are repeat-safe; terminal input remains non-idempotent to avoid duplicated commands on retry
 
+<details>
+<summary>Older changelog</summary>
+
 ### 2026-06-04
 
 - **Shared terminal**: Web terminal is now one foreground shared session with reconnect replay and multi-client sync
 - **Mobile terminal**: fixes mobile input and supports scrolling history, text selection/copy, default MesloLGM NF, and terminal-only `CTRL` / `ALT` / `FN` shortcuts
 - **Settings polish**: mobile UI-style previews now use full-width cards instead of narrow columns
 - **Docs screenshots**: refreshed screenshots and grouped desktop, mobile, and TUI images separately
-
-<details>
-<summary>Older changelog</summary>
 
 ### 2026-06-03
 

@@ -411,6 +411,7 @@ function onReset() {
 function normalizePathSetting(key, fallback) {
   const value = String(settings[key] || '').trim();
   settings[key] = value || fallback;
+  if (key === 'fileBrowserDefaultPath') settings.fileBrowserLastPath = '';
 }
 
 function normalizeCommandSetting(key) {
@@ -429,6 +430,7 @@ function toggleDirPicker(key) {
 
 function selectDirectory(key, path) {
   settings[key] = path || '/';
+  if (key === 'fileBrowserDefaultPath') settings.fileBrowserLastPath = '';
   dirPickerTarget.value = '';
 }
 

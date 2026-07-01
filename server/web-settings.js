@@ -25,6 +25,7 @@ const DEFAULTS = {
   wsKeepAlive: true,
 
   fileBrowserDefaultPath: '/',
+  fileBrowserLastPath: '',
   shellDefaultCwd: '/',
   newConversationDefaultDir: '~',
   claudeCommand: '',
@@ -42,6 +43,7 @@ const STRING_LIMITS = {
   cursorStyle: 32,
   mobileKeyboardEnter: 16,
   fileBrowserDefaultPath: 2048,
+  fileBrowserLastPath: 2048,
   shellDefaultCwd: 2048,
   newConversationDefaultDir: 2048,
   claudeCommand: 2048,

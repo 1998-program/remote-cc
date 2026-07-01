@@ -209,7 +209,7 @@ import AppIcon from './AppIcon.vue';
 const props = defineProps({
   initialPath: { type: String, default: '' },
 });
-const emit = defineEmits(['close']);
+const emit = defineEmits(['close', 'path-change']);
 
 // ── State ─────────────────────────────────────────────────────────────────────
 const currentPath   = ref('');
@@ -284,6 +284,7 @@ async function loadDir(reqPath) {
     currentPath.value = res.path;
     pathInput.value   = res.path;
     entries.value     = res.entries;
+    emit('path-change', res.path);
   } catch (e) {
     error.value = e.message || '加载失败';
   } finally {

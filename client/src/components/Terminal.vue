@@ -260,15 +260,33 @@ function onDrop(e) {
 }
 
 function onTerminalPaste(e) {
+  if (handleClipboardPaste(e)) return;
+}
+
+function handleClipboardPaste(e) {
   const items = Array.from(e.clipboardData?.items || []);
   const imageItem = items.find(i => i.type.startsWith('image/'));
   if (imageItem) {
+    clearNativePasteFallback();
+    awaitingPaste = false;
     e.preventDefault();
     const file = imageItem.getAsFile();
     if (file) uploadFile(file);
+    return true;
   }
+
+  const text = e.clipboardData?.getData('text');
+  if (text) {
+    clearNativePasteFallback();
+    awaitingPaste = false;
+    e.preventDefault();
+    emit('paste', text);
+    return true;
+  }
+  return false;
 }
 let awaitingPaste = false;
+let nativePasteFallbackTimer = null;
 
 let term, fitAddon, resizeObserver, resizeTimer;
 let lastW = 0, lastH = 0;
@@ -290,10 +308,12 @@ let terminalAutoResponsePendingAt = 0;
 // ── 自动锁底 + 上划暂停更新 ──────────────────────────────────────────────────
 let userScrolled = false;       // 用户是否主动上划
 let scrollResumeTimer = null;   // 停止滑动后恢复锁底的计时器
+let autoScrollTimer = null;
 let userScrollIntentUntil = 0;   // 只有用户输入触发的滚动才暂停锁底
 let autoScrollUntil = 0;         // 程序写入触发的滚动不应暂停锁底
 const pendingWrites = [];        // 用户上划时缓存的输出
 let boundViewport = null;
+const SCROLL_RESUME_DELAY = 5000;
 
 function isMobileViewport() {
   if (typeof window === 'undefined') return false;
@@ -323,15 +343,28 @@ function onViewportScroll() {
   } else if (now < userScrollIntentUntil) {
     // 上划 → 暂停自动更新
     userScrolled = true;
+    scheduleScrollResume();
   } else if (now < autoScrollUntil) {
     return;
   } else if (isMobileViewport()) {
     userScrolled = true;
+    scheduleScrollResume();
   }
 }
 
 function markUserScrollIntent() {
-  userScrollIntentUntil = Date.now() + (isMobileViewport() ? 4000 : 900);
+  userScrollIntentUntil = Date.now() + (isMobileViewport() ? 4000 : 2500);
+  scheduleScrollResume();
+}
+
+function scheduleScrollResume() {
+  clearTimeout(scrollResumeTimer);
+  scrollResumeTimer = setTimeout(() => {
+    if (mobileCopyMode.value) return;
+    userScrolled = false;
+    flushPending();
+    scrollToBottomSoon();
+  }, SCROLL_RESUME_DELAY);
 }
 
 function bindViewport(vp) {
@@ -356,10 +389,10 @@ function unbindViewport() {
 }
 
 function scrollToBottomSoon() {
-  if (mobileCopyMode.value || (isMobileViewport() && userScrolled)) return;
+  if (mobileCopyMode.value || userScrolled) return;
   autoScrollUntil = Date.now() + 500;
-  clearTimeout(scrollResumeTimer);
-  scrollResumeTimer = setTimeout(() => {
+  clearTimeout(autoScrollTimer);
+  autoScrollTimer = setTimeout(() => {
     term?.scrollToBottom();
     requestAnimationFrame(() => term?.scrollToBottom());
   }, 16);
@@ -600,6 +633,14 @@ onMounted(() => {
 
   // ── 复制：Ctrl+Shift+C 或右键 Copy ──────────────────────────────────────
   term.attachCustomKeyEventHandler(e => {
+    if (e.type === 'keydown' && (e.ctrlKey || e.metaKey) && !e.shiftKey && e.code === 'KeyC') {
+      const sel = term.getSelection();
+      if (sel) {
+        copyText(sel);
+        return false;
+      }
+      return true;
+    }
     if (e.type === 'keydown' && e.ctrlKey && e.shiftKey && e.code === 'KeyC') {
       const sel = term.getSelection();
       if (sel) copyText(sel);
@@ -613,9 +654,9 @@ onMounted(() => {
   });
 
   // ── 粘贴：监听原生 paste 事件（Ctrl+V / 手机长按粘贴） ──────────────────
-  // onTerminalPaste 先检查是否是图片，如果是则拦截上传；否则 onNativePaste 处理文字
+  // 图片走上传，文字走浏览器剪贴板；Ctrl/Cmd+V 在捕获阶段转到隐藏输入框。
   termRef.value.addEventListener('paste', onTerminalPaste);
-  termRef.value.addEventListener('paste', onNativePaste);
+  termRef.value.addEventListener('keydown', onTerminalKeydownCapture, true);
 
   termRef.value.addEventListener('contextmenu', onContextMenu);
   termRef.value.addEventListener('touchstart', onTermTouchStart, { passive: true });
@@ -666,12 +707,15 @@ onBeforeUnmount(() => {
   mobileMediaQueryCleanup?.();
   unbindViewport();
   termRef.value?.removeEventListener('contextmenu', onContextMenu);
-  termRef.value?.removeEventListener('paste', onNativePaste);
   termRef.value?.removeEventListener('paste', onTerminalPaste);
+  termRef.value?.removeEventListener('keydown', onTerminalKeydownCapture, true);
   termRef.value?.removeEventListener('touchstart', onTermTouchStart);
   termRef.value?.removeEventListener('touchmove', onTermTouchMove);
   termRef.value?.removeEventListener('touchend', clearLongPressTimer);
   termRef.value?.removeEventListener('touchcancel', clearLongPressTimer);
+  clearNativePasteFallback();
+  clearTimeout(scrollResumeTimer);
+  clearTimeout(autoScrollTimer);
   selectionDisposable?.dispose();
   term?.dispose();
 });
@@ -684,6 +728,7 @@ function fit() {
 }
 function scrollToBottom() {
   userScrolled = false;
+  clearTimeout(scrollResumeTimer);
   flushPending();
   term?.scrollToBottom();
 }
@@ -978,11 +1023,37 @@ function doPaste() {
   }
 }
 
-// 原生 paste 事件（Ctrl+V、手机长按粘贴、浏览器粘贴按钮）
-function onNativePaste(e) {
-  e.preventDefault();
-  const text = e.clipboardData?.getData('text');
-  if (text) emit('paste', text);
+function isPasteShortcut(e) {
+  if (e.altKey) return false;
+  if (!(e.ctrlKey || e.metaKey)) return false;
+  return e.key?.toLowerCase?.() === 'v' || e.code === 'KeyV';
+}
+
+function focusPasteTrapForNativePaste() {
+  awaitingPaste = true;
+  clearNativePasteFallback();
+  const input = pasteInputRef.value;
+  if (!input) {
+    awaitingPaste = false;
+    doPaste();
+    return;
+  }
+  input.value = '';
+  input.removeAttribute('readonly');
+  try { input.focus({ preventScroll: true }); } catch (_) { input.focus(); }
+  input.select?.();
+  nativePasteFallbackTimer = setTimeout(() => {
+    if (!awaitingPaste) return;
+    awaitingPaste = false;
+    doPaste();
+    nextTick(() => focusTerm());
+  }, 160);
+}
+
+function onTerminalKeydownCapture(e) {
+  if (!isPasteShortcut(e)) return;
+  focusPasteTrapForNativePaste();
+  e.stopPropagation();
 }
 
 function onContextMenu(e) {
@@ -1023,10 +1094,14 @@ function ctxPasteClick() {
 function onTrapPaste(e) {
   if (!awaitingPaste) return;
   awaitingPaste = false;
-  const text = e.clipboardData?.getData('text');
-  if (text) emit('paste', text);
-  e.preventDefault();
+  clearNativePasteFallback();
+  handleClipboardPaste(e);
   nextTick(() => focusTerm());
+}
+
+function clearNativePasteFallback() {
+  clearTimeout(nativePasteFallbackTimer);
+  nativePasteFallbackTimer = null;
 }
 function onTrapBlur() {
   awaitingPaste = false;
@@ -1057,11 +1132,15 @@ function ctxClear()     { ctxMenu.show = false; term?.clear(); }
   display: flex; flex-direction: column; width: 100%; height: 100%; overflow: hidden;
 }
 .term-container {
-  flex: 1; min-height: 0; overflow: hidden; padding: 5px;
+  flex: 1; min-height: 0; overflow: hidden; padding: 0;
   background: var(--bg);
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--panel) 14%, transparent), transparent 120px),
     var(--bg);
+}
+.term-container :deep(.xterm) {
+  width: 100%;
+  height: 100%;
 }
 .term-container.drag-over {
   outline: 2px dashed var(--border-strong);
