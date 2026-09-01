@@ -226,6 +226,7 @@ import {
 } from './settings.js';
 import { useI18n } from './i18n.js';
 import { route, navigate } from './router.js';
+import { sortSessionsByRecentActivity } from '../../shared/session-order.js';
 
 const { t } = useI18n();
 
@@ -288,7 +289,7 @@ const aliveSessions = computed(() => sessionList.value.filter(s => s.alive));
 const deadSessions  = computed(() => sessionList.value.filter(s => !s.alive));
 
 function applySessionList(sessions) {
-  sessionList.value = Array.isArray(sessions) ? sessions : [];
+  sessionList.value = Array.isArray(sessions) ? sortSessionsByRecentActivity(sessions) : [];
   sessionsLoading.value = false;
 }
 
@@ -707,11 +708,10 @@ function applyHttpSessionSnapshot(entry, snapshot, shouldClear = false) {
   if (typeof snapshot.alive === 'boolean') entry.alive = snapshot.alive;
 
   const el = termRefs[entry.sid];
-  const shouldRefresh = Boolean(shouldClear || snapshot.reset || snapshot.output || entry._reconnectNoticePending);
+  const shouldRefresh = Boolean(shouldClear || snapshot.reset || entry._reconnectNoticePending);
   const suppressReplayInput = Boolean(shouldClear || snapshot.reset);
   if ((shouldClear || snapshot.reset) && el) el.clear();
   if (snapshot.output && el) el.write(snapshot.output, { suppressInput: suppressReplayInput });
-  if (el && snapshot.output) nextTick(() => el.scrollToBottom());
   if (snapshot.alive === false) {
     entry.connectionStatus = 'closed';
     entry.connectedBadgeVisible = false;
@@ -762,7 +762,7 @@ async function startEntryHttp(entry) {
         retryDelay = 1000;
         if (destroyed) return;
         markEntryConnected(entry, 'http', {
-          refresh: Boolean(result.reset || result.output || entry._reconnectNoticePending),
+          refresh: Boolean(result.reset || entry._reconnectNoticePending),
         });
         if (result.reset) termRefs[entry.sid]?.clear?.();
         if (result.output) termRefs[entry.sid]?.write?.(result.output, { suppressInput: !!result.reset });

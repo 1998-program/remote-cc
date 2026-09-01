@@ -10,6 +10,7 @@
 'use strict';
 
 const net      = require('net');
+const http     = require('http');
 const fs       = require('fs');
 const path     = require('path');
 const os       = require('os');
@@ -123,13 +124,44 @@ function proxyOwnsPort(port) {
 }
 
 // ── 本地 Meta ─────────────────────────────────────────────────────────────────
-function loadMeta() {
+function loadMetaFile() {
   try { return JSON.parse(fs.readFileSync(META_FILE, 'utf8')); } catch (_) { return []; }
+}
+function loadMeta(info = null) {
+  return loadMetaLive(info).catch(() => loadMetaFile());
+}
+function loadMetaLive(info) {
+  return new Promise((resolve, reject) => {
+    const tok = localToken();
+    if (!tok || !info?.port) { reject(new Error('no live token')); return; }
+    const req = http.get({
+      host: '127.0.0.1',
+      port: info.port,
+      path: `/api/active-sessions?token=${encodeURIComponent(tok)}`,
+      timeout: 800,
+    }, res => {
+      let body = '';
+      res.setEncoding('utf8');
+      res.on('data', chunk => { body += chunk; });
+      res.on('end', () => {
+        if (res.statusCode !== 200) { reject(new Error('bad status')); return; }
+        try {
+          const data = JSON.parse(body);
+          Array.isArray(data) ? resolve(data) : reject(new Error('bad sessions'));
+        } catch (e) {
+          reject(e);
+        }
+      });
+    });
+    req.on('timeout', () => req.destroy(new Error('timeout')));
+    req.on('error', reject);
+  });
 }
 function sockPath(sid) {
   return IS_WIN ? `\\\\.\\pipe\\rcc-${sid}` : path.join(SOCK_DIR, `${sid}.sock`);
 }
 function sockAlive(sid) { return IS_WIN || fs.existsSync(sockPath(sid)); }
+function sessionActiveTs(s) { return Number(s?.lastActiveAt || s?.createdAt || 0); }
 
 // ── Agent 历史（本地读取） ────────────────────────────────────────────────────
 function loadProjects(agent = 'claude') {
@@ -450,8 +482,7 @@ function doAttach(sp, sname, onDetach, sessionId) {
 
   const sock = net.createConnection(sp);
 
-  // 清除 stdin 残留监听器
-  process.stdin.removeAllListeners('data');
+  // 清除菜单残留监听器；保留 readline 的内部 data listener，回菜单后仍可解析按键
   process.stdin.removeAllListeners('keypress');
   if (process.stdin.isTTY) process.stdin.setRawMode(true);
   process.stdin.resume();
@@ -487,7 +518,7 @@ function doAttach(sp, sname, onDetach, sessionId) {
     if (detached) return;
     detached = true;
 
-    process.stdin.removeAllListeners('data');
+    process.stdin.removeListener('data', onStdinData);
     sock.removeAllListeners();
     process.stdout.removeListener('resize', sendResize);
     clearInterval(watchdog);
@@ -507,7 +538,6 @@ function doAttach(sp, sname, onDetach, sessionId) {
     // CC 退出时等 6s（服务端 5s 后清理 session），确保 meta 文件已更新
     const delay = fromEscape ? 300 : 6000;
     setTimeout(() => {
-      process.stdin.removeAllListeners('data');
       process.stdin.removeAllListeners('keypress');
       // pause 确保不在 flowing 模式，menu() 的 setRawMode+on(keypress) 能正常工作
       process.stdin.pause();
@@ -520,7 +550,7 @@ function doAttach(sp, sname, onDetach, sessionId) {
     if (!serverAlive(serverInfo())) {
       detached = true;
       clearInterval(watchdog);
-      process.stdin.removeAllListeners('data');
+      process.stdin.removeListener('data', onStdinData);
       sock.removeAllListeners();
       if (!sock.destroyed) try { sock.destroy(); } catch (_) {}
       process.stdout.removeListener('resize', sendResize);
@@ -536,7 +566,7 @@ function doAttach(sp, sname, onDetach, sessionId) {
 }
 
 function returnToMainAfterDetach() {
-  // doAttach removes readline's internal data listeners; re-register before menu().
+  // Ensure keypress parsing is ready again before returning to the menu.
   readline.emitKeypressEvents(process.stdin);
   pageMain().catch(err => {
     wr(A.show + '\n' + A.red + '  错误: ' + err.message + A.R + '\n');
@@ -554,7 +584,7 @@ process.stdin.setMaxListeners(50);
 process.stdout.setMaxListeners(50);
 
 function menu(title, items, opts = {}) {
-  const { hdr = '', footer = '', banner = false } = opts;
+  const { hdr = '', footer = '', banner = false, hotkeys = [] } = opts;
   return new Promise(resolve => {
     let cur = items.findIndex(i => !i._sep && !i._disabled);
     if (cur < 0) cur = 0;
@@ -593,7 +623,9 @@ function menu(title, items, opts = {}) {
 
       wr('\n' + hr('·', A.d) + '\n');
       if (footer) wr(A.gray + '  ' + footer + A.R + '\n');
-      wr(A.gray + '  ↑↓ 选择   Enter 确认   q/Esc 返回   Ctrl+C 退出' + A.R + '\n');
+      const hotkeyLabels = hotkeys.map(h => h.label).filter(Boolean);
+      const hotkeyText = hotkeyLabels.length ? '   ' + hotkeyLabels.join('   ') : '';
+      wr(A.gray + '  ↑↓ 选择   Enter 确认   q/Esc 返回   Ctrl+C 退出' + hotkeyText + A.R + '\n');
     };
 
     const next = (dir) => {
@@ -621,11 +653,18 @@ function menu(title, items, opts = {}) {
       else if (k.name === 'return' || k.name === 'enter') done(cur);
       else if (k.name === 'escape' || k.name === 'q')    done(null);
       else if (k.ctrl && k.name === 'c') { done(null); wr('\n'); process.exit(0); }
+      else {
+        const hk = hotkeys.find(h => h.key === k.name && !h.ctrl && !h.meta && !h.shift);
+        if (hk) {
+          done(Object.prototype.hasOwnProperty.call(hk, 'value') ? hk.value : { hotkey: hk.key, index: cur });
+        }
+      }
     };
 
     // 确保没有残留的 keypress 监听器
     process.stdin.removeAllListeners('keypress');
     if (process.stdin.isTTY) process.stdin.setRawMode(true);
+    process.stdin.resume();
     process.stdin.on('keypress', onKey);
     render();
   });
@@ -673,11 +712,12 @@ async function confirm(msg) {
 async function pageMain() {
   const info  = serverInfo();
   const alive = serverAlive(info);
-  const metas = loadMeta();
+  const metas = await loadMeta(info);
   const now   = Date.now();
 
-  const liveSessions  = metas.filter(s => s.alive);
-  const deadSessions  = metas.filter(s => !s.alive);
+  const byRecentActivity = (a, b) => sessionActiveTs(b) - sessionActiveTs(a);
+  const liveSessions  = metas.filter(s => s.alive).sort(byRecentActivity);
+  const deadSessions  = metas.filter(s => !s.alive).sort(byRecentActivity);
 
   const hdr = alive
     ? A.green + '● 服务运行中' + A.R + A.gray + `  :${info.port}` + (info.pid ? `  pid ${info.pid}` : '  local') + A.R
@@ -722,14 +762,40 @@ async function pageMain() {
   items.push({ label: A.gray + '↻  刷新' + A.R, _type: 'refresh' });
   items.push({ label: A.gray + '✕  退出' + A.R, _type: 'quit' });
 
-  const idx = await menu('对话列表', items, { hdr, banner: true });
+  const sessionHotkeys = items
+    .map((item, index) => ({ item, index }))
+    .filter(x => x.item?._type === 'session')
+    .slice(0, 9)
+    .map((x, i) => ({ key: String(i + 1), label: i === 0 ? '1-9 接入会话' : '', value: x.index }));
+
+  const idx = await menu('对话列表', items, {
+    hdr, banner: true,
+    hotkeys: [{ key: 'r', label: 'R 重命名' }, ...sessionHotkeys],
+  });
   if (idx === null) return pageMain();
+
+  if (idx && typeof idx === 'object' && idx.hotkey === 'r') {
+    const selected = items[idx.index];
+    if (selected?._type === 'session' || selected?._type === 'dead') {
+      await doRenameSession(selected._data, info);
+    }
+    return pageMain();
+  }
 
   const item = items[idx];
   if (!item || item._sep) return pageMain();
 
   switch (item._type) {
-    case 'session': return pageSession(item._data);
+    case 'session': {
+      const s = item._data;
+      if (sockAlive(s.sessionId)) {
+        doAttach(sockPath(s.sessionId), s.name, returnToMainAfterDetach, s.sessionId);
+      } else {
+        await notice('Socket 不可用，请确认服务运行中', A.red, 1800);
+        return pageMain();
+      }
+      break;
+    }
     case 'dead':    return pageDeadSession(item._data);
     case 'new':     return pageNew(info, item._agent);
     case 'history': return pageHistory(info, item._agent);
@@ -756,14 +822,22 @@ async function pageSession(s) {
   const idx = await menu(
     '会话: ' + A.b + s.name + A.R,
     items,
-    { hdr: A.gray + agentName(s.agent) + '  ' + cwd(s.workingDir) + '  ' + s.sessionId.slice(0,8) + A.R }
+    {
+      hdr: A.gray + agentName(s.agent) + '  ' + cwd(s.workingDir) + '  ' + s.sessionId.slice(0,8) + A.R,
+      hotkeys: [{ key: 'r', label: 'R 重命名' }],
+    }
   );
+
+  if (idx && typeof idx === 'object' && idx.hotkey === 'r') {
+    await doRenameSession(s, info);
+    return pageMain();
+  }
 
   if (idx === null || items[idx]?._type === 'back') return pageMain();
 
   switch (items[idx]._type) {
     case 'attach':
-      doAttach(sp, s.name, pageMain, s.sessionId);
+      doAttach(sp, s.name, returnToMainAfterDetach, s.sessionId);
       break;
     case 'nosock':
       await notice('Socket 不可用，请确认服务运行中', A.red, 1800);
@@ -835,6 +909,17 @@ async function doDeleteSession(s, info) {
   wr(A.up(1) + A.erase);
   if (ok) await notice('已删除', A.green, 600);
   else    await notice('删除失败', A.red, 1500);
+}
+
+async function doRenameSession(s, info) {
+  if (!s) return;
+  const name = await input('新会话名', s.name || '');
+  if (!name || name === s.name) return;
+  wr('\n' + A.gray + '  正在重命名会话...' + A.R);
+  const ok = await sendControlMsg(info, { type: 'rename', sessionId: s.sessionId, name });
+  wr(A.up(1) + A.erase);
+  if (ok) await notice('已重命名', A.green, 700);
+  else    await notice('重命名失败，请确认服务运行中', A.red, 1500);
 }
 
 // ── 新建对话 ──────────────────────────────────────────────────────────────────
@@ -1003,7 +1088,7 @@ const attachArg = (() => {
 
 async function startTui() {
   if (attachArg) {
-    const meta = loadMeta();
+    const meta = await loadMeta(serverInfo());
     const s = meta.find(m =>
       m.name === attachArg ||
       m.sessionId === attachArg ||

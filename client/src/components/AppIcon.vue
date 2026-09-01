@@ -68,6 +68,7 @@ function iconFor(name, style) {
     case 'stop': return stopIcon(style);
     case 'copy': return copyIcon(style);
     case 'paste': return pasteIcon(style);
+    case 'edit': return editIcon(style);
     case 'select-all': return selectAllIcon(style);
     case 'clear': return clearIcon(style);
     case 'download': return transferIcon(style, 'download');
@@ -155,6 +156,8 @@ function lineIcon(name) {
       return [node('rect', { x: 8, y: 8, width: 11, height: 13, rx: 1.8 }), node('path', { d: 'M6 16H5.8A1.8 1.8 0 0 1 4 14.2V5.8A1.8 1.8 0 0 1 5.8 4h8.4A1.8 1.8 0 0 1 16 5.8V6' })];
     case 'paste':
       return [node('path', { d: 'M9 5h6' }), node('path', { d: 'M10 3.5h4A1.5 1.5 0 0 1 15.5 5v1A1.5 1.5 0 0 1 14 7.5h-4A1.5 1.5 0 0 1 8.5 6V5A1.5 1.5 0 0 1 10 3.5Z' }), node('path', { d: 'M7 6H5.8A1.8 1.8 0 0 0 4 7.8v12.4A1.8 1.8 0 0 0 5.8 22h12.4a1.8 1.8 0 0 0 1.8-1.8V7.8A1.8 1.8 0 0 0 18.2 6H17' })];
+    case 'edit':
+      return editIcon('line');
     case 'select-all': return [node('rect', { x: 4, y: 4, width: 16, height: 16, rx: 2, 'stroke-dasharray': '3 3' }), node('rect', { x: 8, y: 8, width: 8, height: 8, rx: 1.2 })];
     case 'clear': return [node('circle', { cx: 12, cy: 12, r: 9 }), node('path', { d: 'M8 16 16 8' })];
     case 'download': return [node('path', { d: 'M12 4v10' }), node('path', { d: 'm8 10 4 4 4-4' }), node('path', { d: 'M5 19h14' })];
@@ -280,6 +283,26 @@ function pasteIcon(style) {
   if (style === 'sharp') return [node('path', { d: 'M8 6H4v16h16V6h-4' }), node('path', { d: 'M9 4h6v3H9Z' })];
   if (style === 'duo') return [node('rect', { x: 4, y: 6, width: 16, height: 16, rx: 2, ...tint({ opacity: 0.13 }) }), ...lineIcon('paste')];
   return lineIcon('paste');
+}
+
+function editIcon(style) {
+  if (style === 'bold') return [
+    node('path', { d: 'M5 17.8 15.9 6.9l1.7 1.7L6.7 19.5H5Z', ...fill({ opacity: 0.18 }) }),
+    node('path', { d: 'M5 19.5h3.4L18.8 9.1a2 2 0 0 0 0-2.8l-.1-.1a2 2 0 0 0-2.8 0L5 17.1Z' }),
+  ];
+  if (style === 'sharp') return [
+    node('path', { d: 'M5 19h4L19 9l-4-4L5 15Z' }),
+    node('path', { d: 'M13.8 6.2 17.8 10.2' }),
+  ];
+  if (style === 'duo') return [
+    node('path', { d: 'M5 17.2 16.2 6 19 8.8 7.8 20H5Z', ...tint({ opacity: 0.14 }) }),
+    node('path', { d: 'M5 17.2 16.2 6a2 2 0 0 1 2.8 2.8L7.8 20H5Z' }),
+    node('path', { d: 'M14.8 7.4 17.6 10.2' }),
+  ];
+  return [
+    node('path', { d: 'M5 17.2 16.2 6a2 2 0 0 1 2.8 2.8L7.8 20H5Z' }),
+    node('path', { d: 'M14.8 7.4 17.6 10.2' }),
+  ];
 }
 
 function selectAllIcon(style) {

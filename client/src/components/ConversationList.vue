@@ -72,6 +72,9 @@
             <button class="cl-action" :title="t.log_refresh" @click="$emit('log', s)">
               <AppIcon name="log" class="cl-act-icon" />
             </button>
+            <button class="cl-action" :title="t.rename_session" @click="startEdit(s)">
+              <AppIcon name="edit" class="cl-act-icon" />
+            </button>
             <button
               class="cl-action cl-action-close"
               :title="s.alive ? t.stop_session : t.delete_session"
@@ -118,7 +121,11 @@ const confirm = reactive({ show: false, msg: '', ok: '', fn: null });
 function startEdit(s) {
   editingId.value = s.sessionId;
   editVal.value   = s.name;
-  nextTick(() => editRef.value?.focus());
+  nextTick(() => {
+    const input = Array.isArray(editRef.value) ? editRef.value[0] : editRef.value;
+    input?.focus();
+    input?.select?.();
+  });
 }
 function commitEdit(s) {
   if (editVal.value.trim() && editVal.value !== s.name) {

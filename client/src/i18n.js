@@ -36,6 +36,7 @@ const messages = {
     min_ago:        '分钟前',
     hour_ago:       '小时前',
     day_ago:        '天前',
+    rename_session: '重命名会话',
 
     // 确认弹窗
     stop_session:   '停止会话',
@@ -192,6 +193,7 @@ const messages = {
     min_ago:        'm ago',
     hour_ago:       'h ago',
     day_ago:        'd ago',
+    rename_session: 'Rename session',
 
     stop_session:   'Stop Session',
     stop_confirm:   'The process will be terminated.',

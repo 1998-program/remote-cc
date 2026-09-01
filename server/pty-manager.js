@@ -5,6 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { normalizeAgent, findAgentBin, getAgentConfig, buildAgentEnv } = require('./agent-config');
+const { sortSessionsByRecentActivity } = require('./session-order');
 
 const IS_WIN = process.platform === 'win32';
 const MAX_SESSIONS = 20;
@@ -215,6 +216,31 @@ function saveMeta() {
   try { fs.writeFileSync(META_FILE, JSON.stringify(data, null, 2)); } catch (_) {}
 }
 
+let lastMetaSaveAt = 0;
+let metaSaveTimer = null;
+function saveMetaSoon() {
+  const now = Date.now();
+  const wait = Math.max(0, 5000 - (now - lastMetaSaveAt));
+  if (wait === 0) {
+    lastMetaSaveAt = now;
+    saveMeta();
+    return;
+  }
+  if (!metaSaveTimer) {
+    metaSaveTimer = setTimeout(() => {
+      metaSaveTimer = null;
+      lastMetaSaveAt = Date.now();
+      saveMeta();
+    }, wait);
+  }
+}
+
+function touchSessionActivity(session) {
+  if (!session) return;
+  session.lastActiveAt = Date.now();
+  saveMetaSoon();
+}
+
 function restoreDeadSessions() {
   // 每次启动清除所有历史 session（不恢复）
   try { fs.writeFileSync(META_FILE, '[]'); } catch (_) {}
@@ -278,7 +304,7 @@ function startSocketServer(sessionId) {
             // 输入时 resize 到该 unix client 的尺寸
             try { session.ptyProcess.resize(client.cols || 80, client.rows || 24); } catch (_) {}
             session.ptyProcess.write(Buffer.from(inBuf, 'binary').toString());
-            session.lastActiveAt = Date.now();
+            touchSessionActivity(session);
           }
           inBuf = '';
         }
@@ -404,7 +430,7 @@ function createSession(ws, wsId, { workingDir, resumeSessionId, name, agent, col
     // 通过 session.logStream 访问，避免闭包捕获旧 stream（rotate 后会更新）
     try { if (session.logStream && !session.logStream.destroyed) session.logStream.write(data); } catch (_) {}
     rotateLogIfNeeded(sessionId);
-    session.lastActiveAt = Date.now();
+    touchSessionActivity(session);
     notifyHttpWaiters(session);
     broadcastData(session, data);
   });
@@ -686,7 +712,7 @@ function handleMessage(ws, wsId, raw) {
     if (session && session.ptyProcess) {
       resizeToClient(entry?.client, session);
       session.ptyProcess.write(raw);
-      session.lastActiveAt = Date.now();
+      touchSessionActivity(session);
     }
     return;
   }
@@ -789,7 +815,7 @@ function handleMessage(ws, wsId, raw) {
       if (session && session.ptyProcess && msg.data) {
         resizeToClient(entry?.client, session);
         session.ptyProcess.write(msg.data);
-        session.lastActiveAt = Date.now();
+        touchSessionActivity(session);
       }
       break;
 
@@ -901,7 +927,7 @@ function inputSessionHttp(sessionId, params = {}) {
   session.httpRows = rows;
   try { session.ptyProcess.resize(cols, rows); } catch (_) {}
   session.ptyProcess.write(data);
-  session.lastActiveAt = Date.now();
+  touchSessionActivity(session);
   return { ok: true, cursor: bufferCursor(session) };
 }
 
@@ -1044,14 +1070,14 @@ function killShellHttp(shellId = '1') {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function getSessionList() {
-  return Array.from(sessions.entries()).map(([id, s]) => ({
+  return sortSessionsByRecentActivity(Array.from(sessions.entries()).map(([id, s]) => ({
     sessionId: id, name: s.name, workingDir: s.workingDir, agent: s.agent || 'claude',
     alive: s.exitCode === null && !!s.ptyProcess,
     exitCode: s.exitCode,
     createdAt: s.createdAt, lastActiveAt: s.lastActiveAt,
     logPath: s.logPath, socketPath: s.socketPath,
     clientCount: s.clients.size,
-  })).sort((a, b) => b.createdAt - a.createdAt);
+  })));
 }
 
 function listSessions() { return getSessionList(); }

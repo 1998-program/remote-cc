@@ -70,6 +70,17 @@
       <AppIcon name="copy" />
     </button>
 
+    <button
+      v-if="pendingOsc52Text"
+      class="osc52-copy-action"
+      title="Copy Codex response"
+      aria-label="Copy Codex response"
+      @click.stop="copyPendingOsc52"
+    >
+      <AppIcon name="copy" />
+      <span>Copy response</span>
+    </button>
+
     <span v-if="lastUploadPath" class="img-path-hint" :title="lastUploadPath">
       <AppIcon name="check" /> {{ shortPath(lastUploadPath) }}
     </span>
@@ -149,6 +160,7 @@ const terminalSelection = ref('');
 const mobileCopyMode = ref(false);
 const mobileCopyText = ref('');
 const mobileModifier = ref('');
+const pendingOsc52Text = ref('');
 const mobileCopyColors = computed(() => {
   const theme = THEMES[props.theme] || THEMES.cyber;
   return {
@@ -291,6 +303,7 @@ let nativePasteFallbackTimer = null;
 let term, fitAddon, resizeObserver, resizeTimer;
 let lastW = 0, lastH = 0;
 let selectionDisposable = null;
+let osc52Disposable = null;
 let mobileMediaQuery = null;
 let mobileMediaQueryCleanup = null;
 let longPressTimer = null;
@@ -307,13 +320,12 @@ let terminalAutoResponsePendingAt = 0;
 
 // ── 自动锁底 + 上划暂停更新 ──────────────────────────────────────────────────
 let userScrolled = false;       // 用户是否主动上划
-let scrollResumeTimer = null;   // 停止滑动后恢复锁底的计时器
 let autoScrollTimer = null;
 let userScrollIntentUntil = 0;   // 只有用户输入触发的滚动才暂停锁底
 let autoScrollUntil = 0;         // 程序写入触发的滚动不应暂停锁底
 const pendingWrites = [];        // 用户上划时缓存的输出
 let boundViewport = null;
-const SCROLL_RESUME_DELAY = 5000;
+let lastViewportScrollTop = 0;
 
 function isMobileViewport() {
   if (typeof window === 'undefined') return false;
@@ -335,42 +347,38 @@ function isNearBottom() {
 
 function onViewportScroll() {
   const now = Date.now();
+  const vp = term?.element?.querySelector('.xterm-viewport');
+  const scrollTop = vp ? vp.scrollTop : 0;
+  const movedUp = scrollTop < lastViewportScrollTop - 1;
   if (isNearBottom() && !mobileCopyMode.value) {
     // 回到底部 → 恢复自动跟随，冲刷缓存
     userScrolled = false;
-    clearTimeout(scrollResumeTimer);
     flushPending();
-  } else if (now < userScrollIntentUntil) {
+  } else if (movedUp || now < userScrollIntentUntil) {
     // 上划 → 暂停自动更新
     userScrolled = true;
-    scheduleScrollResume();
+    clearTimeout(autoScrollTimer);
   } else if (now < autoScrollUntil) {
+    lastViewportScrollTop = scrollTop;
     return;
-  } else if (isMobileViewport()) {
+  } else {
+    // 滚动条拖拽、触控板惯性滚动等不一定先触发 wheel/pointer 事件。
+    // 只要不是程序自己的自动滚动，离开底部就认为用户正在阅读历史内容。
     userScrolled = true;
-    scheduleScrollResume();
+    clearTimeout(autoScrollTimer);
   }
+  lastViewportScrollTop = scrollTop;
 }
 
 function markUserScrollIntent() {
   userScrollIntentUntil = Date.now() + (isMobileViewport() ? 4000 : 2500);
-  scheduleScrollResume();
-}
-
-function scheduleScrollResume() {
-  clearTimeout(scrollResumeTimer);
-  scrollResumeTimer = setTimeout(() => {
-    if (mobileCopyMode.value) return;
-    userScrolled = false;
-    flushPending();
-    scrollToBottomSoon();
-  }, SCROLL_RESUME_DELAY);
 }
 
 function bindViewport(vp) {
   if (!vp || boundViewport === vp) return;
   unbindViewport();
   boundViewport = vp;
+  lastViewportScrollTop = vp.scrollTop || 0;
   vp.addEventListener('scroll', onViewportScroll, { passive: true });
   vp.addEventListener('wheel', markUserScrollIntent, { passive: true });
   vp.addEventListener('touchstart', markUserScrollIntent, { passive: true });
@@ -393,8 +401,12 @@ function scrollToBottomSoon() {
   autoScrollUntil = Date.now() + 500;
   clearTimeout(autoScrollTimer);
   autoScrollTimer = setTimeout(() => {
+    if (mobileCopyMode.value || userScrolled) return;
     term?.scrollToBottom();
-    requestAnimationFrame(() => term?.scrollToBottom());
+    requestAnimationFrame(() => {
+      if (mobileCopyMode.value || userScrolled) return;
+      term?.scrollToBottom();
+    });
   }, 16);
 }
 
@@ -594,6 +606,10 @@ onMounted(() => {
   term.loadAddon(fitAddon);
   term.loadAddon(new WebLinksAddon());
   term.open(termRef.value);
+  // Codex's /copy command emits OSC 52 from the PTY. xterm.js ignores that
+  // sequence unless the host registers a handler, so bridge it to the browser
+  // clipboard instead of trying to use the server's native clipboard.
+  osc52Disposable = term.parser.registerOscHandler(52, onOsc52);
   configureInputMode(termRef.value?.querySelector('.xterm-helper-textarea'));
   selectionDisposable = term.onSelectionChange(() => {
     terminalSelection.value = term.getSelection();
@@ -714,9 +730,10 @@ onBeforeUnmount(() => {
   termRef.value?.removeEventListener('touchend', clearLongPressTimer);
   termRef.value?.removeEventListener('touchcancel', clearLongPressTimer);
   clearNativePasteFallback();
-  clearTimeout(scrollResumeTimer);
   clearTimeout(autoScrollTimer);
   selectionDisposable?.dispose();
+  osc52Disposable?.dispose();
+  osc52Disposable = null;
   term?.dispose();
 });
 
@@ -728,7 +745,6 @@ function fit() {
 }
 function scrollToBottom() {
   userScrolled = false;
-  clearTimeout(scrollResumeTimer);
   flushPending();
   term?.scrollToBottom();
 }
@@ -870,14 +886,53 @@ function onMobilePaste(e) {
 }
 
 // ── 复制工具函数（兼容 HTTP 非安全上下文） ───────────────────────────────────
-function copyText(text) {
-  if (!text) return;
+async function copyText(text) {
+  if (!text) return false;
   // 优先用 Clipboard API（HTTPS / localhost）
-  if (navigator.clipboard?.writeText) {
-    navigator.clipboard.writeText(text).catch(() => fallbackCopy(text));
-  } else {
-    fallbackCopy(text);
+  if (window.isSecureContext && navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch (_) {}
   }
+  return fallbackCopy(text);
+}
+
+function decodeOsc52Text(data) {
+  const separator = data.indexOf(';');
+  if (separator < 0) return null;
+
+  // OSC 52 uses '?' for read requests. Never expose the browser clipboard to
+  // the remote PTY; only handle write targets such as Codex's "c" target.
+  const target = data.slice(0, separator);
+  if (!target || target.includes('?')) return null;
+
+  const encoded = data.slice(separator + 1);
+  if (!encoded) return '';
+  try {
+    const binary = atob(encoded);
+    const bytes = Uint8Array.from(binary, char => char.charCodeAt(0));
+    return new TextDecoder().decode(bytes);
+  } catch (_) {
+    return null;
+  }
+}
+
+function onOsc52(data) {
+  const text = decodeOsc52Text(data);
+  if (text) {
+    copyText(text).then(copied => {
+      pendingOsc52Text.value = copied ? '' : text;
+    });
+  }
+  // Consume OSC 52 even when the browser clipboard is unavailable. Returning
+  // true prevents the escape sequence from leaking into terminal output.
+  return true;
+}
+
+async function copyPendingOsc52() {
+  const text = pendingOsc52Text.value;
+  if (text && await copyText(text)) pendingOsc52Text.value = '';
 }
 
 function getTerminalBufferText() {
@@ -1008,8 +1063,10 @@ function fallbackCopy(text) {
   document.body.appendChild(ta);
   ta.focus();
   ta.select();
-  try { document.execCommand('copy'); } catch (_) {}
+  let copied = false;
+  try { copied = document.execCommand('copy'); } catch (_) {}
   document.body.removeChild(ta);
+  return copied;
 }
 
 // ── 粘贴：优先 Clipboard API，失败则提示 ─────────────────────────────────────
@@ -1148,6 +1205,29 @@ function ctxClear()     { ctxMenu.show = false; term?.clear(); }
   outline-offset: -4px;
   background: var(--bg2);
   background: color-mix(in srgb, var(--neon) 5%, var(--bg));
+}
+.osc52-copy-action {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 12;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 34px;
+  max-width: calc(100% - 20px);
+  padding: 7px 11px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--text);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28);
+  font: inherit;
+  cursor: pointer;
+}
+.osc52-copy-action:hover {
+  border-color: var(--neon);
+  color: var(--neon);
 }
 
 .mobile-input-trap {
